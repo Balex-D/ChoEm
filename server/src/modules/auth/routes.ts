@@ -13,23 +13,52 @@ const credentials = z.object({
     .email()
     .max(254)
     .transform((x) => x.toLowerCase()),
-  password: z.string().min(12).max(128),
+  password: z.string().min(6, "Mật khẩu cần ít nhất 6 ký tự.").max(128),
 });
 export function authRoutes(db: Database, c: Config) {
   const router = Router();
   router.get("/me", authenticate(db), (req, res) =>
     res.json({ user: req.user }),
   );
+  router.patch("/role", authenticate(db), async (req, res) => {
+    const { role } = z.object({ role: z.enum(["anh", "em"]) }).parse(req.body);
+    await db.transaction(async (q) => {
+      await q.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [
+        req.user!.id,
+      ]);
+      const { rows } = await q.query(
+        "SELECT id FROM connections WHERE owner_id=$1 OR companion_id=$1",
+        [req.user!.id],
+      );
+      if (rows.length)
+        throw new HttpError(
+          409,
+          "CONNECTED",
+          "Hãy ngắt kết nối trước khi đổi vai trò.",
+        );
+      await q.query("DELETE FROM connection_invites WHERE owner_id=$1", [
+        req.user!.id,
+      ]);
+      await q.query("UPDATE users SET role=$2 WHERE id=$1", [
+        req.user!.id,
+        role,
+      ]);
+    });
+    res.json({ user: { ...req.user!, role } });
+  });
   router.post("/register", limit(db, "register", 5), async (req, res) => {
     const input = credentials
-      .extend({ name: z.string().trim().min(1).max(24).default("Em") })
+      .extend({
+        name: z.string().trim().min(1).max(24).default("Em"),
+        role: z.enum(["anh", "em"]).default("em"),
+      })
       .parse(req.body);
     const id = randomUUID(),
       encoded = await hashPassword(input.password);
     await db.transaction(async (q) => {
       await q.query(
-        "INSERT INTO users(id,email,password_hash) VALUES($1,$2,$3)",
-        [id, input.email, encoded],
+        "INSERT INTO users(id,email,password_hash,role) VALUES($1,$2,$3,$4)",
+        [id, input.email, encoded, input.role],
       );
       await q.query("INSERT INTO profiles(user_id,name) VALUES($1,$2)", [
         id,
@@ -37,14 +66,16 @@ export function authRoutes(db: Database, c: Config) {
       ]);
     });
     await createSession(db, id, res, c);
-    res.status(201).json({ user: { id, email: input.email } });
+    res
+      .status(201)
+      .json({ user: { id, email: input.email, role: input.role } });
   });
   // Precomputed on first login; absent accounts still run the same password derivation.
   let dummyHash: Promise<string> | undefined;
   router.post("/login", limit(db, "login", 12), async (req, res) => {
     const input = credentials.parse(req.body);
     const { rows } = await db.query(
-      "SELECT id,email,password_hash FROM users WHERE email=$1",
+      "SELECT id,email,password_hash,role FROM users WHERE email=$1",
       [input.email],
     );
     dummyHash ??= hashPassword("unavailable-account-placeholder");
@@ -59,7 +90,9 @@ export function authRoutes(db: Database, c: Config) {
         "Email hoặc mật khẩu chưa đúng.",
       );
     await createSession(db, rows[0].id, res, c);
-    res.json({ user: { id: rows[0].id, email: rows[0].email } });
+    res.json({
+      user: { id: rows[0].id, email: rows[0].email, role: rows[0].role },
+    });
   });
   router.post("/logout", async (req, res) => {
     await destroySession(db, req, res, c);
@@ -73,7 +106,10 @@ export function authRoutes(db: Database, c: Config) {
       const input = z
         .object({
           currentPassword: z.string().max(128),
-          newPassword: z.string().min(12).max(128),
+          newPassword: z
+            .string()
+            .min(6, "Mật khẩu cần ít nhất 6 ký tự.")
+            .max(128),
         })
         .parse(req.body);
       const { rows } = await db.query(

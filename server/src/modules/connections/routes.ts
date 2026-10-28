@@ -28,22 +28,39 @@ export function connectionRoutes(db: Database, c: Config) {
     });
   });
   router.post("/invites", limit(db, "invite", 15), async (req, res) => {
+    if (req.user!.role !== "em")
+      throw new HttpError(
+        403,
+        "ROLE_REQUIRED",
+        "Chỉ vai trò Em được tạo mã mời.",
+      );
     const token = randomToken(),
       expiry = new Date(Date.now() + 15 * 60000);
-    await db.query(
-      `INSERT INTO connection_invites(token_hash,owner_id,expires_at) VALUES($1,$2,$3)
+    await db.transaction(async (q) => {
+      const {
+        rows: [user],
+      } = await q.query("SELECT role FROM users WHERE id=$1 FOR UPDATE", [
+        req.user!.id,
+      ]);
+      if (user.role !== "em")
+        throw new HttpError(
+          403,
+          "ROLE_REQUIRED",
+          "Chỉ vai trò Em được tạo mã mời.",
+        );
+      await q.query(
+        `INSERT INTO connection_invites(token_hash,owner_id,expires_at) VALUES($1,$2,$3)
       ON CONFLICT(owner_id) DO UPDATE SET token_hash=excluded.token_hash,expires_at=excluded.expires_at`,
-      [hashToken(token), req.user!.id, expiry],
-    );
+        [hashToken(token), req.user!.id, expiry],
+      );
+    });
     const url = `${c.APP_ORIGIN}/#invite=${token}`;
-    res
-      .status(201)
-      .json({
-        token,
-        url,
-        expiresAt: expiry.toISOString(),
-        qr: await QRCode.toDataURL(url, { width: 256, margin: 2 }),
-      });
+    res.status(201).json({
+      token,
+      url,
+      expiresAt: expiry.toISOString(),
+      qr: await QRCode.toDataURL(url, { width: 256, margin: 2 }),
+    });
   });
   router.delete("/invites", async (req, res) => {
     await db.query("DELETE FROM connection_invites WHERE owner_id=$1", [
@@ -52,11 +69,38 @@ export function connectionRoutes(db: Database, c: Config) {
     res.status(204).end();
   });
   router.post("/accept", limit(db, "accept", 15), async (req, res) => {
+    if (req.user!.role !== "anh")
+      throw new HttpError(
+        403,
+        "ROLE_REQUIRED",
+        "Chọn vai trò Anh để nhập mã người đồng hành.",
+      );
     const { token } = z
       .object({ token: z.string().regex(/^[a-f0-9]{64}$/) })
       .parse(req.body);
     const id = randomUUID();
     await db.transaction(async (q) => {
+      const {
+        rows: [candidate],
+      } = await q.query(
+        "SELECT owner_id FROM connection_invites WHERE token_hash=$1",
+        [hashToken(token)],
+      );
+      if (candidate) {
+        const { rows: users } = await q.query(
+          "SELECT id,role FROM users WHERE id=$1 OR id=$2 ORDER BY id FOR UPDATE",
+          [candidate.owner_id, req.user!.id],
+        );
+        if (
+          users.find((u) => u.id === req.user!.id)?.role !== "anh" ||
+          users.find((u) => u.id === candidate.owner_id)?.role !== "em"
+        )
+          throw new HttpError(
+            403,
+            "ROLE_REQUIRED",
+            "Kết nối cần vai trò Em tạo mã và Anh nhập mã.",
+          );
+      }
       const {
         rows: [invite],
       } = await q.query(

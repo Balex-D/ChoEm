@@ -28,10 +28,10 @@ async function ask(prompt: string) {
   return value;
 }
 try {
-  const password = await ask("New password (12–128 characters): "),
+  const password = await ask("New password (6–128 characters): "),
     repeat = await ask("Repeat password: ");
-  if (password.length < 12 || password.length > 128 || password !== repeat)
-    throw new Error("Passwords must match and contain 12–128 characters");
+  if (password.length < 6 || password.length > 128 || password !== repeat)
+    throw new Error("Passwords must match and contain 6–128 characters");
   const db = createDatabase(loadConfig().DATABASE_URL);
   try {
     const encoded = await hashPassword(password);

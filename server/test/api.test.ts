@@ -44,12 +44,13 @@ beforeEach(async () => {
 });
 const mutate = (agent: any, method: string, url: string, body: any = {}) =>
   agent[method](url).set("Origin", origin).set("X-Cho-Em", "1").send(body);
-async function user(email: string) {
+async function user(email: string, role = "em") {
   const agent = request.agent(app);
   const response = await mutate(agent, "post", "/api/auth/register", {
     email,
     password,
     name: "Em",
+    role,
   });
   assert.equal(response.status, 201, JSON.stringify(response.body));
   return { agent, id: response.body.user.id };
@@ -111,6 +112,97 @@ test("authentication, CSRF and secure response defaults", async () => {
     401,
   );
 });
+test("passwords require at least six characters", async () => {
+  const agent = request.agent(app);
+  const credentials = { email: "short@example.com", password: "12345" };
+  assert.equal(
+    (await mutate(agent, "post", "/api/auth/register", credentials)).status,
+    400,
+  );
+  credentials.password = "123456";
+  assert.equal(
+    (await mutate(agent, "post", "/api/auth/register", credentials)).status,
+    201,
+  );
+  assert.equal(
+    (await mutate(request(app), "post", "/api/auth/login", credentials)).status,
+    200,
+  );
+  assert.equal(
+    (
+      await mutate(agent, "post", "/api/auth/change-password", {
+        currentPassword: credentials.password,
+        newPassword: "abcde",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await mutate(agent, "post", "/api/auth/change-password", {
+        currentPassword: credentials.password,
+        newPassword: "abcdef",
+      })
+    ).status,
+    204,
+  );
+});
+
+test("roles restrict invitations and custom symptom suggestions survive sync", async () => {
+  const em = await user("em@example.com");
+  const anh = await user("anh@example.com", "anh");
+  assert.equal((await anh.agent.get("/api/auth/me")).body.user.role, "anh");
+  assert.equal(
+    (await mutate(anh.agent, "post", "/api/connections/invites")).status,
+    403,
+  );
+  assert.equal(
+    (
+      await mutate(em.agent, "post", "/api/connections/accept", {
+        token: "a".repeat(64),
+      })
+    ).status,
+    403,
+  );
+  const state = {
+    ...sample(),
+    symptomSuggestions: ["Chóng mặt"],
+    entries: { [today()]: { mood: "", symptoms: ["Chóng mặt"], note: "" } },
+  };
+  assert.equal(
+    (await mutate(em.agent, "put", "/api/state", { revision: 0, state }))
+      .status,
+    200,
+  );
+  const saved = (await em.agent.get("/api/state")).body.state;
+  assert.deepEqual(saved.symptomSuggestions, ["Chóng mặt"]);
+  assert.equal(
+    (
+      await mutate(em.agent, "put", "/api/state", {
+        revision: 1,
+        state: { ...saved, symptomSuggestions: [] },
+      })
+    ).status,
+    200,
+  );
+  const removed = (await em.agent.get("/api/state")).body.state;
+  assert.deepEqual(removed.symptomSuggestions, []);
+  assert.deepEqual(removed.entries[today()].symptoms, ["Chóng mặt"]);
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        token: invite.body.token,
+      })
+    ).status,
+    201,
+  );
+  assert.equal(
+    (await mutate(anh.agent, "patch", "/api/auth/role", { role: "em" })).status,
+    409,
+  );
+});
+
 test("tenant isolation, atomic revision checks, deletion and reconnect", async () => {
   const a = await user("a@example.com"),
     b = await user("b@example.com");
@@ -165,8 +257,8 @@ test("validation rejects impossible dates, future cycles, overlaps and invalid n
 });
 test("single-use hashed invites; privacy enforced before sending companion data", async () => {
   const a = await user("a@example.com"),
-    b = await user("b@example.com"),
-    third = await user("third@example.com");
+    b = await user("b@example.com", "anh"),
+    third = await user("third@example.com", "anh");
   const date = today(),
     state = {
       ...sample(),
@@ -191,7 +283,7 @@ test("single-use hashed invites; privacy enforced before sending companion data"
         token: invite.body.token,
       })
     ).status,
-    400,
+    403,
   );
   const accepted = await mutate(b.agent, "post", "/api/connections/accept", {
     token: invite.body.token,
@@ -244,7 +336,7 @@ test("single-use hashed invites; privacy enforced before sending companion data"
 });
 test("revoked and expired invitations cannot connect", async () => {
   const a = await user("a@example.com"),
-    b = await user("b@example.com");
+    b = await user("b@example.com", "anh");
   const first = await mutate(a.agent, "post", "/api/connections/invites");
   const second = await mutate(a.agent, "post", "/api/connections/invites");
   assert.equal(

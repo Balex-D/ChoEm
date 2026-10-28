@@ -18,6 +18,7 @@ export async function readState(q: Queryable, userId: string) {
     name: p.name,
     length: p.cycle_length,
     duration: p.period_duration,
+    symptomSuggestions: p.symptom_suggestions,
     starts: cycles.map((r) => r.start),
     ends: Object.fromEntries(
       cycles.filter((r) => r.end).map((r) => [r.start, r.end]),
@@ -75,6 +76,10 @@ export async function saveState(
       ],
     );
     await q.query("DELETE FROM cycles WHERE user_id=$1", [userId]);
+    await q.query(
+      "UPDATE profiles SET symptom_suggestions=$2::jsonb WHERE user_id=$1",
+      [userId, JSON.stringify(state.symptomSuggestions)],
+    );
     for (const start of state.starts)
       await q.query(
         "INSERT INTO cycles(user_id,start_date,end_date) VALUES($1,$2,$3)",

@@ -11,6 +11,10 @@ export const stateSchema = z
     name: z.string().trim().min(1).max(24),
     length: z.number().int().min(15).max(90),
     duration: z.number().int().min(1).max(15),
+    symptomSuggestions: z
+      .array(z.string().trim().min(1).max(60))
+      .max(50)
+      .default(["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"]),
     starts: z.array(dateSchema).max(1000),
     ends: z.record(dateSchema, dateSchema),
     entries: z.record(
@@ -27,10 +31,7 @@ export const stateSchema = z
             "Nhạy cảm",
           ])
           .default(""),
-        symptoms: z
-          .array(z.enum(["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"]))
-          .max(4)
-          .default([]),
+        symptoms: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
         note: z.string().max(2000).default(""),
       }),
     ),

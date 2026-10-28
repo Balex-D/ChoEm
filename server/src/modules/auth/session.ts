@@ -6,6 +6,7 @@ import type { Config } from "../../config.js";
 export interface Identity {
   id: string;
   email: string;
+  role: "anh" | "em";
 }
 declare global {
   namespace Express {
@@ -49,7 +50,7 @@ export function authenticate(db: Database): RequestHandler {
       if (!token)
         throw new HttpError(401, "UNAUTHENTICATED", "Vui lòng đăng nhập.");
       const { rows } = await db.query(
-        "SELECT u.id,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()",
+        "SELECT u.id,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()",
         [hashToken(token)],
       );
       if (!rows.length)
