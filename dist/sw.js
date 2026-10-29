@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v2-backend";
+const CACHE = "cho-em-v3-flower-icons";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,9 @@ const ASSETS = [
   ),
   "./assets/icon-192.png",
   "./assets/icon-512.png",
+  "./assets/flower.png",
+  "./assets/clover.png",
+  "./assets/heart.png",
 ];
 const ALLOWED = new Set(
   ASSETS.map((path) => new URL(path, self.location).pathname),

@@ -9,7 +9,7 @@ export async function renderConnections({
   login,
   pendingInvite,
 }) {
-  main.innerHTML = `<div class="page-intro"><div class="eyebrow">THƯƠNG NHAU TỪ NHỮNG ĐIỀU NHỎ</div><h1>Người đồng hành ♡</h1><p>Để người ấy hiểu em hơn, theo cách em muốn.</p></div><section class="card connect-hero"><img src="assets/OmTim.png" alt="Một chiếc ôm dành cho em"><div><h2>Có người cùng em<br>qua những ngày nhạy cảm.</h2><p>Em luôn quyết định điều gì được chia sẻ. Kết nối không tự bật chia sẻ cảm xúc hoặc ghi chú.</p></div></section><div id="connection-root"><p>Đang tải…</p></div>`;
+  main.innerHTML = `<div class="page-intro"><div class="eyebrow">THƯƠNG NHAU TỪ NHỮNG ĐIỀU NHỎ</div><h1>Người đồng hành <img class="heading-sticker" src="assets/heart.png" alt=""></h1><p>Để người ấy hiểu em hơn, theo cách em muốn.</p></div><section class="card connect-hero"><img src="assets/OmTim.png" alt="Một chiếc ôm dành cho em"><div><h2>Có người cùng em<br>qua những ngày nhạy cảm.</h2><p>Em luôn quyết định điều gì được chia sẻ. Kết nối không tự bật chia sẻ cảm xúc hoặc ghi chú.</p></div></section><div id="connection-root"><p>Đang tải…</p></div>`;
   const root = main.querySelector("#connection-root");
   if (!cloud.user) {
     root.innerHTML =

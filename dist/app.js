@@ -17,7 +17,9 @@ const paths = {
   pen: '<path d="m4 15-1 6 6-1L21 8l-5-5Z M13 6l5 5"/>',
 };
 const icon = (n) =>
-  `<span class="icon"><svg viewBox="0 0 24 24">${paths[n] || paths.heart}</svg></span>`;
+  n === "heart" || n === "clover"
+    ? `<span class="icon"><img src="assets/${n}.png" alt="" aria-hidden="true"></span>`
+    : `<span class="icon"><svg viewBox="0 0 24 24">${paths[n] || paths.heart}</svg></span>`;
 const moods = [
   ["Cute", "Vui vẻ"],
   ["OmTim", "Yêu đời"],
@@ -469,7 +471,7 @@ function bindSymptoms() {
 }
 function renderJournal() {
   $("#main").innerHTML =
-    `<div class="page-intro"><div class="eyebrow">NHỮNG ĐIỀU EM MUỐN NHỚ</div><h1>Nhật ký của em ♡</h1><p>Một chút cảm xúc, một chút lắng nghe mỗi ngày.</p></div>${
+    `<div class="page-intro"><div class="eyebrow">NHỮNG ĐIỀU EM MUỐN NHỚ</div><h1>Nhật ký của em ${icon("clover")}</h1><p>Một chút cảm xúc, một chút lắng nghe mỗi ngày.</p></div>${
       Object.keys(state.entries).length
         ? Object.keys(state.entries)
             .sort()
