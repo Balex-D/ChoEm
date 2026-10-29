@@ -6,6 +6,15 @@ import type { Database, Queryable } from "../src/db/database.js";
 import { createApp } from "../src/app.js";
 import { migrate } from "../src/db/migrate.js";
 import { hashToken } from "../src/common/security.js";
+import {
+  issueInvite,
+  generateInviteCode,
+} from "../src/modules/connections/invites.js";
+import jsQR from "jsqr";
+// @ts-ignore pngjs is the PNG reader used by the existing qrcode dependency.
+import { PNG } from "pngjs";
+// @ts-ignore Shared browser parser; no DOM needed for QR verification.
+import { parseConnectionCode } from "../../dist/js/connection-code.js";
 const origin = "http://localhost:8080",
   password = "test-password-12345";
 let engine: PGlite, db: Database, app: ReturnType<typeof createApp>;
@@ -334,6 +343,258 @@ test("single-use hashed invites; privacy enforced before sending companion data"
   );
   assert.equal((await b.agent.get(route)).status, 404);
 });
+test("QR round trip validates UUID and code before linking; duplicate links are rejected", async () => {
+  const em = await user("qr-em@example.com");
+  const otherEm = await user("qr-other@example.com");
+  const anh = await user("qr-anh@example.com", "anh");
+  const secondAnh = await user("qr-anh2@example.com", "anh");
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  const image = PNG.sync.read(
+    Buffer.from(invite.body.qr.split(",")[1], "base64"),
+  );
+  const decoded = jsQR(
+    new Uint8ClampedArray(image.data),
+    image.width,
+    image.height,
+  );
+  assert.ok(decoded);
+  const payload = parseConnectionCode(decoded.data, origin);
+  assert.equal(payload.ownerId, undefined);
+  assert.ok(!decoded.data.includes(em.id));
+  assert.equal(payload.code, invite.body.token);
+  assert.equal(invite.body.ownerId, undefined);
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        ...payload,
+        ownerId: otherEm.id,
+      })
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        ...payload,
+        ownerId: "invalid",
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        code: "a".repeat(64),
+      })
+    ).status,
+    400,
+  );
+  const linked = await mutate(
+    anh.agent,
+    "post",
+    "/api/connections/accept",
+    payload,
+  );
+  assert.equal(linked.status, 201);
+  assert.equal(
+    (await mutate(anh.agent, "post", "/api/connections/accept", payload))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await mutate(secondAnh.agent, "post", "/api/connections/accept", payload))
+      .status,
+    404,
+  );
+  assert.equal(
+    (await mutate(em.agent, "post", "/api/connections/invites")).status,
+    409,
+  );
+  const otherInvite = await mutate(
+    otherEm.agent,
+    "post",
+    "/api/connections/invites",
+  );
+  const otherPayload = { ownerId: otherEm.id, code: otherInvite.body.code };
+  assert.equal(
+    (await mutate(anh.agent, "post", "/api/connections/accept", otherPayload))
+      .status,
+    409,
+  );
+  assert.equal(
+    (
+      await mutate(
+        secondAnh.agent,
+        "post",
+        "/api/connections/accept",
+        otherPayload,
+      )
+    ).status,
+    201,
+  );
+  assert.equal((await db.query("SELECT id FROM connections")).rows.length, 2);
+  assert.equal(
+    (await anh.agent.get("/api/connections")).body.connections.length,
+    1,
+  );
+  assert.equal(
+    (await em.agent.get("/api/connections")).body.connections[0].role,
+    "owner",
+  );
+});
+
+test("six-character codes retry collisions and preserve existing invites on exhaustion", async () => {
+  const first = await user("collision-em1@example.com");
+  const second = await user("collision-em2@example.com");
+  const expiry = new Date(Date.now() + 15 * 60000);
+  await db.transaction((q) => issueInvite(q, first.id, expiry, () => "K7M9X2"));
+  let attempts = 0;
+  const code = await db.transaction((q) =>
+    issueInvite(q, second.id, expiry, () =>
+      ++attempts <= 2 ? "K7M9X2" : "ABC123",
+    ),
+  );
+  assert.equal(code, "ABC123");
+  assert.equal(attempts, 3);
+  const rows = (
+    await db.query(
+      "SELECT token_hash,owner_id FROM connection_invites ORDER BY token_hash",
+    )
+  ).rows;
+  assert.equal(rows.length, 2);
+  assert.equal(
+    rows.find((row) => row.token_hash === hashToken("K7M9X2"))?.owner_id,
+    first.id,
+  );
+  await assert.rejects(
+    db.transaction((q) => issueInvite(q, second.id, expiry, () => "K7M9X2")),
+    (error: any) => error.code === "INVITE_UNAVAILABLE",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "SELECT token_hash FROM connection_invites WHERE owner_id=$1",
+        [second.id],
+      )
+    ).rows[0].token_hash,
+    hashToken("ABC123"),
+  );
+  for (let i = 0; i < 100; i++)
+    assert.match(generateInviteCode(), /^[A-Z0-9]{6}$/);
+});
+
+test("short manual codes normalize case and whitespace; UUID and expiry remain unchanged", async () => {
+  const em = await user("short-em@example.com");
+  const anh = await user("short-anh@example.com", "anh");
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  assert.match(invite.body.code, /^[A-Z0-9]{6}$/);
+  assert.equal(invite.body.ownerId, undefined);
+  const remaining = Date.parse(invite.body.expiresAt) - Date.now();
+  assert.ok(remaining > 1 * 60000 && remaining <= 2 * 60000);
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        code: ` ${invite.body.code.toLowerCase()} `,
+      })
+    ).status,
+    201,
+  );
+  assert.equal((await em.agent.get("/api/auth/me")).body.user.id, em.id);
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        code: invite.body.code,
+      })
+    ).status,
+    404,
+  );
+});
+
+test("guessing is limited by both account and IP without leaking whether an Em exists", async () => {
+  const first = await user("limited-anh1@example.com", "anh");
+  const second = await user("limited-anh2@example.com", "anh");
+  for (let i = 0; i < 10; i++) {
+    const response = await mutate(
+      first.agent,
+      "post",
+      "/api/connections/accept",
+      { code: "ZZZZZZ" },
+    );
+    assert.equal(response.status, 404);
+    assert.equal(response.body.error.code, "INVITE_EXPIRED");
+  }
+  const limited = await mutate(first.agent, "post", "/api/connections/accept", {
+    code: "ZZZZZZ",
+  });
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers["retry-after"]) > 0);
+  for (let i = 0; i < 4; i++)
+    assert.equal(
+      (
+        await mutate(second.agent, "post", "/api/connections/accept", {
+          code: "ZZZZZZ",
+        })
+      ).status,
+      404,
+    );
+  assert.equal(
+    (
+      await mutate(second.agent, "post", "/api/connections/accept", {
+        code: "ZZZZZZ",
+      })
+    ).status,
+    429,
+  );
+  await engine.exec(
+    "UPDATE rate_limits SET reset_at=now()-interval '1 minute'",
+  );
+  assert.equal(
+    (
+      await mutate(first.agent, "post", "/api/connections/accept", {
+        code: "ZZZZZZ",
+      })
+    ).status,
+    404,
+  );
+});
+
+test("previous long invitation codes remain usable until expiry", async () => {
+  const em = await user("legacy-em@example.com");
+  const anh = await user("legacy-anh@example.com", "anh");
+  const token = "a".repeat(64);
+  await db.query(
+    "INSERT INTO connection_invites(token_hash,owner_id,expires_at) VALUES($1,$2,now()+interval '15 minutes')",
+    [hashToken(token), em.id],
+  );
+  assert.equal(
+    (
+      await mutate(anh.agent, "post", "/api/connections/accept", {
+        ownerId: em.id,
+        code: token,
+      })
+    ).status,
+    201,
+  );
+});
+
+test("simultaneous QR requests consume one invitation only", async () => {
+  const em = await user("race-em@example.com");
+  const first = await user("race-first@example.com", "anh");
+  const second = await user("race-second@example.com", "anh");
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  const payload = { ownerId: em.id, code: invite.body.code };
+  const results = await Promise.all([
+    mutate(first.agent, "post", "/api/connections/accept", payload),
+    mutate(second.agent, "post", "/api/connections/accept", payload),
+  ]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [201, 404]);
+  assert.equal((await db.query("SELECT id FROM connections")).rows.length, 1);
+  assert.equal(
+    (await db.query("SELECT token_hash FROM connection_invites")).rows.length,
+    0,
+  );
+});
+
 test("revoked and expired invitations cannot connect", async () => {
   const a = await user("a@example.com"),
     b = await user("b@example.com", "anh");

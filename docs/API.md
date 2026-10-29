@@ -8,7 +8,7 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 - Giá trị cookie là token ngẫu nhiên 256 bit; database chỉ lưu SHA-256 của token.
 - Mọi POST/PUT/PATCH/DELETE cần `Origin` khớp `APP_ORIGIN`, header `X-Cho-Em: 1`, `Content-Type: application/json`, kể cả logout/delete không có body thì gửi `{}`.
 - Mọi API response có `Cache-Control: no-store`. Không có CORS cho frontend bên ngoài.
-- Giới hạn request: 800/15 phút/IP chung; login 12, register 5, tạo/chấp nhận lời mời 15. Bộ đếm dùng database, chia sẻ giữa process.
+- Giới hạn request: 800/15 phút/IP chung; login 12, register 5, tạo lời mời 15. Chấp nhận lời mời giới hạn 15 lần/15 phút/IP và 10 lần/15 phút/tài khoản, tính cả mã sai định dạng và yêu cầu thành công; thay IP không đặt lại bộ đếm tài khoản. Bộ đếm dùng database, chia sẻ giữa process; vượt giới hạn trả 429 và `Retry-After`.
 
 ## Endpoints
 
@@ -23,14 +23,22 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 | PUT | `/state` | `{state,revision}`; đồng bộ snapshot nguyên tử; trả revision mới |
 | PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,notes}}`; trả state và revision mới |
 | GET | `/connections` | Danh sách kết nối của chính tài khoản, tên đối phương và vai trò |
-| POST | `/connections/invites` | Tạo mã 256 bit, liên kết với fragment `#invite=...`, QR data URI; hạn 15 phút |
+| POST | `/connections/invites` | Chỉ Em chưa liên kết; trả `{code,token,url,qr,expiresAt}`; mã 6 ký tự A–Z/0–9 dùng một lần, hạn 2 phút; không trả UUID Em; `token` là alias của `code` |
 | DELETE | `/connections/invites` | Hủy lời mời đang chờ |
-| POST | `/connections/accept` | `{token}`; chấp nhận mã dùng một lần |
+| POST | `/connections/accept` | Chỉ Anh; `{ownerId,code}` từ QR, `{code}` cho mã 6 ký tự thủ công hoặc `{token}` cho client cũ; trả `{id}` khi liên kết thành công |
 | DELETE | `/connections/:id` | Chủ sở hữu hoặc người đồng hành ngắt kết nối |
 | GET | `/connections/:id/summary?date=YYYY-MM-DD` | Chỉ người đồng hành đã liên kết; chỉ ngày hiện tại theo Asia/Ho_Chi_Minh |
 | GET | `/healthz` (ngoài `/api`) | Kiểm tra app và kết nối database |
 
-Tài khoản có tối đa một người nhận dữ liệu của mình và tối đa một người mình đang đồng hành. Chia sẻ có hướng; chấp nhận lời mời không tự chia sẻ ngược lại dữ liệu của người nhận.
+Mỗi tài khoản có tối đa một liên kết Anh–Em. Backend khóa hai tài khoản theo thứ tự UUID trong transaction, kiểm tra vai trò hiện tại, UUID khớp chủ mã, thời hạn và kết nối đã tồn tại. Sau khi tạo quan hệ trong bảng `connections`, mã bị xóa trong cùng transaction. Các ràng buộc UNIQUE hiện có là lớp bảo vệ cuối chống trùng. Không tự thay người đồng hành hoặc bật quyền chia sẻ.
+
+QR mới phiên bản 2 chỉ chứa URL cùng origin: `/#invite=<code>&v=2`. Không đưa UUID Em vào QR, liên kết, nội dung hiển thị hay response tạo lời mời. Backend ánh xạ bản băm mã về UUID trong database. API vẫn chấp nhận QR phiên bản 1 và `{token}` cũ tới khi mã hết hạn/hủy. Mã chỉ xuất hiện trong fragment, không gửi trong URL request/log. Không có bảng yêu cầu chờ mới: “Gửi yêu cầu liên kết” là xác nhận của Anh, sau đó server lưu quan hệ ngay nếu hợp lệ. Hộp thoại đếm ngược theo `expiresAt`, ẩn mã/QR và khóa sao chép khi hết hạn.
+
+Đăng ký Anh chỉ nhập tên/email/mật khẩu/nhập lại mật khẩu; nhập mã hoặc quét QR sau khi đăng nhập. Anh chỉ thấy trang kết nối khi chưa liên kết. Sau khi liên kết, chỉ render các trường có trong summary đã lọc theo quyền Em; không hiển thị lịch/nhật ký cá nhân, quảng bá hoặc lời khuyên không thuộc chia sẻ. Làm mới mỗi 15 giây khi trang hiển thị, xóa summary khi mất quyền/kết nối hoặc lỗi mạng; không lưu offline. Bật/tắt chia sẻ chu kỳ áp dụng ngay, không hỏi xác nhận; tâm trạng và ghi chú vẫn giữ xác nhận khi bật.
+
+Mã mới sinh bằng `crypto.randomInt` không thiên lệch, 6 ký tự từ 36 chữ/số (ví dụ `K7M9X2`). Không thay UUID hoặc cấu trúc database: `connection_invites.token_hash` ánh xạ bản băm mã tới `owner_id`. Cấp mã dùng `INSERT ... ON CONFLICT(token_hash) DO NOTHING RETURNING` để kiểm tra trùng nguyên tử, thử tối đa 12 mã, trả 503 nếu không cấp được. Lỗi này rollback để giữ mã cũ của Em. Mã ngắn nhập thường tự chuyển thành chữ hoa; mã dài 64 ký tự đã cấp vẫn được chấp nhận tới khi hết hạn/hủy. Mã sai, hết hạn hoặc đã dùng trả lỗi chung 404, không tiết lộ tài khoản Em. Giới hạn số lần thử áp dụng trước kiểm tra định dạng mã.
+
+Camera dùng `getUserMedia` trên HTTPS/localhost, chỉ xin video sau khi Anh bấm Quét QR. Bộ giải mã jsQR 1.4.0 được phục vụ từ `dist/vendor` (giấy phép Apache-2.0 đi kèm), không dùng CDN và không tải hình ảnh lên server. Camera dừng khi quét xong, đóng hộp thoại, đổi màn hình, ẩn trang hoặc hết 90 giây. Sau khi quét, Anh xác nhận gửi yêu cầu; mã sai, hết hạn hoặc tài khoản đã liên kết sẽ hiện lỗi và không tạo quan hệ mới.
 
 ## Snapshot
 

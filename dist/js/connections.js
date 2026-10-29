@@ -1,4 +1,8 @@
 import { api } from "./api.js";
+import { invitationDialog } from "./invite-dialog.js";
+import { renderSharedSummary } from "./shared-view.js";
+import { parseConnectionCode } from "./connection-code.js";
+import { scanConnectionQR } from "./qr-scanner.js";
 export async function renderConnections({
   cloud,
   main,
@@ -10,6 +14,9 @@ export async function renderConnections({
   pendingInvite,
 }) {
   main.innerHTML = `<div class="page-intro"><div class="eyebrow">THƯƠNG NHAU TỪ NHỮNG ĐIỀU NHỎ</div><h1>Người đồng hành <img class="heading-sticker" src="assets/heart.png" alt=""></h1><p>Để người ấy hiểu em hơn, theo cách em muốn.</p></div><section class="card connect-hero"><img src="assets/OmTim.png" alt="Một chiếc ôm dành cho em"><div><h2>Có người cùng em<br>qua những ngày nhạy cảm.</h2><p>Em luôn quyết định điều gì được chia sẻ. Kết nối không tự bật chia sẻ cảm xúc hoặc ghi chú.</p></div></section><div id="connection-root"><p>Đang tải…</p></div>`;
+  if (cloud.user?.role === "anh")
+    main.innerHTML =
+      '<div id="connection-root" class="companion-root"><p>Đang tải kết nối…</p></div>';
   const root = main.querySelector("#connection-root");
   if (!cloud.user) {
     root.innerHTML =
@@ -22,7 +29,7 @@ export async function renderConnections({
     if (!root.isConnected) return;
     const owned = connections.find((c) => c.role === "owner"),
       incoming = connections.find((c) => c.role === "companion");
-    root.innerHTML = `<div class="connect-grid"><section class="card"><h3>♡ Người em chọn chia sẻ</h3>${owned ? `<p>Đang chia sẻ với <b>${escape(owned.name)}</b>.</p><button class="small-button" data-unlink="${owned.id}">Ngắt kết nối</button>` : '<p>Tạo một lời mời riêng. Mã dùng một lần, hết hạn sau 15 phút. Chỉ gửi mã cho người em muốn kết nối.</p><button class="primary full-width" id="create-invite">Tạo mã mời và QR</button><button class="text-button" id="cancel-invite">Hủy mã mời đang chờ</button>'}<hr><h3>Em chọn điều muốn chia sẻ</h3>${[
+    root.innerHTML = `<div class="connect-grid"><section class="card"><h3>♡ Người em chọn chia sẻ</h3>${owned ? `<p>Đang chia sẻ với <b>${escape(owned.name)}</b>.</p><button class="small-button" data-unlink="${owned.id}">Ngắt kết nối</button>` : '<p>Tạo một lời mời riêng. Mã dùng một lần, hết hạn sau 2 phút. Chỉ gửi mã cho người em muốn kết nối.</p><button class="primary full-width" id="create-invite">Tạo mã mời và QR</button><button class="text-button" id="cancel-invite">Hủy mã mời đang chờ</button>'}<hr><h3>Em chọn điều muốn chia sẻ</h3>${[
       ["cycle", "Trạng thái chu kỳ"],
       ["mood", "Tâm trạng hôm nay"],
       ["notes", "Ghi chú và triệu chứng"],
@@ -33,13 +40,50 @@ export async function renderConnections({
       )
       .join(
         "",
-      )}<p>Chỉ ngày hiện tại được chia sẻ. Đổi quyền cần có mạng và máy chủ xác nhận.</p></section><section class="card"><h3>Góc của người đồng hành</h3>${incoming ? `<p>Em đang đồng hành cùng <b>${escape(incoming.name)}</b>.</p><div id="shared-summary"><p>Đang tải trạng thái…</p></div><button class="small-button" id="refresh-summary">Làm mới</button> <button class="text-button" data-unlink="${incoming.id}">Ngắt kết nối</button>` : `<p>Nhập mã người ấy gửi, hoặc mở liên kết từ mã QR bằng camera điện thoại.</p><label class="form-label" for="invite-code">Mã mời</label><input id="invite-code" autocomplete="off" spellcheck="false" maxlength="64" value="${escape(pendingInvite || "")}" placeholder="Dán mã mời tại đây"><button class="primary full-width" id="accept-invite">Chấp nhận lời mời</button>`}</section></div><p id="connection-error" role="alert"></p>`;
+      )}<p>Chỉ ngày hiện tại được chia sẻ. Đổi quyền cần có mạng và máy chủ xác nhận.</p></section><section class="card"><h3>Góc của người đồng hành</h3>${incoming ? `<p>Anh đang đồng hành cùng <b>${escape(incoming.name)}</b>.</p><div id="shared-summary"><p>Đang tải trạng thái…</p></div><button class="small-button" id="refresh-summary">Làm mới</button> <button class="text-button" data-unlink="${incoming.id}">Ngắt kết nối</button>` : `<p>Nhập mã người ấy gửi, hoặc mở liên kết từ mã QR bằng camera điện thoại.</p><label class="form-label" for="invite-code">Mã mời</label><input id="invite-code" autocomplete="off" spellcheck="false" maxlength="64" value="${escape(pendingInvite || "")}" placeholder="Dán mã mời tại đây"><button class="primary full-width" id="accept-invite">Chấp nhận lời mời</button>`}</section></div><p id="connection-error" role="alert"></p>`;
     const isAnh = cloud.user.role === "anh";
     const sections = root.querySelectorAll(".connect-grid > section");
     sections[isAnh ? 0 : 1].remove();
     root.querySelector(".connect-grid").classList.add("single-role");
+    const connectionState = document.createElement("p");
+    connectionState.className = "connection-state";
+    connectionState.setAttribute("role", "status");
+    connectionState.textContent =
+      owned || incoming ? "Đã liên kết Anh–Em ♡" : "Chưa liên kết tài khoản";
+    const refresh = document.createElement("button");
+    refresh.className = "small-button";
+    refresh.id = "refresh-connections";
+    refresh.textContent = "Cập nhật trạng thái";
+    connectionState.append(" ", refresh);
+    root.prepend(connectionState);
     if (isAnh) {
+      root.classList.add("companion-root");
       root.querySelector("h3").textContent = "Anh — Người đồng hành của em";
+      if (!incoming) {
+        const input = root.querySelector("#invite-code");
+        input.maxLength = 512;
+        input.placeholder = "Nhập mã 6 ký tự, ví dụ K7M9X2";
+        input.autocapitalize = "characters";
+        const scan = document.createElement("button");
+        scan.id = "scan-invite";
+        scan.className = "small-button scan-invite";
+        scan.textContent = "Quét QR bằng camera";
+        input.before(scan);
+        const status = document.createElement("p");
+        status.id = "connection-status";
+        status.setAttribute("role", "status");
+        input.after(status);
+        if (pendingInvite) {
+          try {
+            const data = parseConnectionCode(pendingInvite);
+            input.value = data.code || data.token;
+          } catch {
+            input.value = "";
+          }
+        }
+        root.querySelector("#accept-invite").textContent =
+          "Gửi yêu cầu liên kết";
+      }
     }
     const showError = (e) => {
       if (root.isConnected)
@@ -70,34 +114,50 @@ export async function renderConnections({
             }
           }),
       );
+    bind("#refresh-connections", reload);
     bind("#create-invite", async () => {
       const invite = await api("/connections/invites", {
         method: "POST",
         body: {},
       });
-      open(
-        `<h2>Một lời mời dành riêng ♡</h2><img class="invite-qr" src="${invite.qr}" alt="QR lời mời"><p>Người ấy quét QR bằng camera điện thoại, đăng nhập rồi chấp nhận. Mã hết hạn lúc ${new Date(invite.expiresAt).toLocaleTimeString("vi-VN")}.</p><label class="form-label" for="generated-invite">Hoặc gửi mã này</label><input id="generated-invite" readonly value="${escape(invite.token)}"><button class="primary" id="copy-invite">Sao chép liên kết mời</button>`,
-      );
-      document.querySelector("#copy-invite").onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(invite.url);
-          toast("Đã sao chép liên kết mời.");
-        } catch {
-          toast("Hãy sao chép mã trong ô phía trên.");
-        }
-      };
+      invitationDialog(invite, { open, toast });
     });
     bind("#cancel-invite", async () => {
       await api("/connections/invites", { method: "DELETE", body: {} });
       toast("Đã hủy mã mời đang chờ.");
     });
     bind("#accept-invite", async () => {
-      await api("/connections/accept", {
-        method: "POST",
-        body: { token: root.querySelector("#invite-code").value.trim() },
+      const body = parseConnectionCode(
+        root.querySelector("#invite-code").value,
+      );
+      root.querySelector("#connection-error").textContent = "";
+      const status = root.querySelector("#connection-status");
+      status.textContent = "Đang xác thực và gửi yêu cầu liên kết…";
+      try {
+        await api("/connections/accept", { method: "POST", body });
+        toast("Liên kết Anh–Em thành công ♡");
+        await reload();
+      } finally {
+        if (status.isConnected) status.textContent = "";
+      }
+    });
+    bind("#scan-invite", async () => {
+      await scanConnectionQR({
+        open,
+        close,
+        onScan: (raw) => {
+          if (!root.isConnected) return;
+          try {
+            const data = parseConnectionCode(raw);
+            root.querySelector("#invite-code").value = data.code || data.token;
+            root.querySelector("#connection-error").textContent = "";
+            root.querySelector("#connection-status").textContent =
+              "?? qu?t m? m?i. Nh?n G?i y?u c?u li?n k?t ?? x?c nh?n.";
+          } catch (error) {
+            showError(error);
+          }
+        },
       });
-      toast("Đã kết nối với người ấy ♡");
-      await reload();
     });
     bind("[data-unlink]", async (b) => {
       open(
@@ -129,7 +189,7 @@ export async function renderConnections({
         await reload();
         toast("Máy chủ đã cập nhật quyền chia sẻ.");
       };
-      if (enabled) {
+      if (enabled && k !== "cycle") {
         open(
           `<h2>Chia sẻ ${escape(b.getAttribute("aria-label").toLowerCase())}?</h2><p>${owned ? `Người đồng hành <b>${escape(owned.name)}</b> sẽ xem được thông tin này của ngày hiện tại.` : "Thông tin này sẽ được chia sẻ với người đồng hành khi em kết nối."} Em có thể tắt lại khi có mạng.</p><button class="primary" id="confirm-sharing">Bật chia sẻ</button><p id="share-error" role="alert"></p>`,
         );
@@ -143,21 +203,63 @@ export async function renderConnections({
       } else await apply();
     });
     if (incoming && isAnh) {
+      let summaryRequest = 0;
       const summary = async () => {
+        const request = ++summaryRequest;
         const date = new Intl.DateTimeFormat("en-CA", {
           timeZone: "Asia/Ho_Chi_Minh",
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
         }).format(new Date());
-        const { summary: s } = await api(
-          "/connections/" + incoming.id + "/summary?date=" + date,
-        );
-        if (!root.isConnected) return;
-        root.querySelector("#shared-summary").innerHTML =
-          `${"cycle" in s ? `<p><b>Chu kỳ:</b> ${s.cycle ? (s.cycle.inPeriod ? "Đang trong kỳ kinh." : `Ngày ${Number(s.cycle.day)} của chu kỳ. Kỳ tiếp theo ước tính: ${escape(s.cycle.nextDate)}.`) : "Chưa ghi nhận."}</p>` : ""}${"mood" in s ? `<p><b>Tâm trạng:</b> ${escape(s.mood || "Chưa ghi nhận")}</p>` : ""}${"note" in s ? `<p><b>Ghi chú:</b> ${escape(s.note || "Chưa có")}<br>${escape((s.symptoms || []).join(", "))}</p>` : ""}${!("cycle" in s) && !("mood" in s) && !("note" in s) ? "<p>Người ấy chưa bật chia sẻ thông tin.</p>" : ""}<p>♡ ${escape(s.care)}</p>`;
+        try {
+          const { summary: s } = await api(
+            "/connections/" + incoming.id + "/summary?date=" + date,
+          );
+          if (
+            !root.isConnected ||
+            request !== summaryRequest ||
+            document.hidden
+          )
+            return;
+          root.querySelector("#shared-summary").innerHTML = renderSharedSummary(
+            s,
+            escape,
+          );
+          root.querySelector("#connection-error").textContent = "";
+        } catch (error) {
+          if (!root.isConnected || request !== summaryRequest) return;
+          root.querySelector("#shared-summary").replaceChildren();
+          if (error.status === 404) await reload();
+          else showError(error);
+        }
       };
       bind("#refresh-summary", summary);
+      let busy = false;
+      const refresh = async () => {
+        if (busy || !root.isConnected || document.hidden) return;
+        busy = true;
+        try {
+          await summary();
+        } finally {
+          busy = false;
+        }
+      };
+      const visible = () => {
+        if (document.hidden)
+          root.querySelector("#shared-summary")?.replaceChildren();
+        else void refresh();
+      };
+      const interval = setInterval(refresh, 15000);
+      const observer = new MutationObserver(() => {
+        if (!root.isConnected) {
+          clearInterval(interval);
+          observer.disconnect();
+          document.removeEventListener("visibilitychange", visible);
+        }
+      });
+      observer.observe(main, { childList: true });
+      document.addEventListener("visibilitychange", visible);
       await summary();
     }
   } catch (e) {

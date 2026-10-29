@@ -43,13 +43,22 @@ export function accountDialog({
     document.querySelector(".account-actions").before(roleControl);
     document.querySelector("#account-role").value = cloud.user.role || "em";
     run("save-role", async () => {
-      const { user } = await api("/auth/role", { method: "PATCH", body: { role: document.querySelector("#account-role").value } });
+      const { user } = await api("/auth/role", {
+        method: "PATCH",
+        body: { role: document.querySelector("#account-role").value },
+      });
       cloud.user = user;
       await cloud.storage.set("last-account", user);
       afterLogin();
       toast("Đã lưu vai trò.");
     });
     run("sync-now", () => cloud.sync());
+    if (cloud.user.role === "anh") {
+      document.querySelector("#dialog-body h2").textContent =
+        "Tài khoản của Anh";
+      for (const id of ["sync-now", "export-data", "import-guest"])
+        document.getElementById(id).hidden = true;
+    }
     document.querySelector("#export-data").onclick = () => cloud.exportData();
     run("keep-local", () => cloud.resolveConflict(true));
     run("keep-server", () => cloud.resolveConflict(false));
@@ -98,32 +107,99 @@ export function accountDialog({
     };
   };
   function authForm(mode) {
+    let selectedRole = "em";
     open(
       `<h2>${mode === "login" ? "Chào em trở lại ♡" : "Một góc nhỏ cho riêng em"}</h2><p>Đăng nhập để đồng bộ và kết nối người đồng hành. Dữ liệu khách hiện có chỉ được đưa lên tài khoản khi em chọn nhập.</p><form id="auth-form">${mode === "register" ? '<label class="form-label" for="account-name">Tên của em</label><input id="account-name" maxlength="24" required autocomplete="nickname">' : ""}<label class="form-label" for="email">Email</label><input id="email" type="email" autocomplete="email" required maxlength="254"><label class="form-label" for="password">Mật khẩu</label><input id="password" type="password" autocomplete="${mode === "login" ? "current-password" : "new-password"}" minlength="6" maxlength="128" required><p id="auth-error" role="alert"></p><button class="primary">${mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</button></form><button class="text-button" id="auth-switch">${mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}</button><p>Phiên bản này chưa xác minh email và chưa có email khôi phục mật khẩu. Nếu quên mật khẩu, cần liên hệ người quản trị máy chủ.</p>`,
     );
     validatePassword("#password");
     if (mode === "register") {
-      const role = document.createElement("div");
-      role.innerHTML = '<label class="form-label" for="register-role">Vai trò của mình</label><select id="register-role"><option value="em">Em — tạo mã kết nối</option><option value="anh">Anh — nhập mã đồng hành</option></select>';
-      document.querySelector("#account-name").after(role);
+      const form = document.querySelector("#auth-form");
+      const tabs = document.createElement("div");
+      tabs.className = "register-tabs";
+      tabs.setAttribute("role", "tablist");
+      tabs.setAttribute("aria-label", "Vai trò đăng ký");
+      tabs.innerHTML =
+        '<button type="button" role="tab" id="tab-anh" aria-controls="auth-form" aria-selected="false" tabindex="-1" data-role="anh">Anh</button><button type="button" role="tab" id="tab-em" aria-controls="auth-form" aria-selected="true" data-role="em">Em</button>';
+      form.before(tabs);
+      form.setAttribute("role", "tabpanel");
+      form.setAttribute("aria-labelledby", "tab-em");
+      document.querySelector('label[for="account-name"]').textContent = "Tên";
+      const extra = document.createElement("div");
+      extra.innerHTML =
+        '<label class="form-label" for="confirm-password">Nhập lại mật khẩu</label><input id="confirm-password" type="password" autocomplete="new-password" required maxlength="128">';
+      document.querySelector("#password").after(extra);
+      const password = document.querySelector("#password");
+      const confirmation = document.querySelector("#confirm-password");
+      const checkConfirmation = () =>
+        confirmation.setCustomValidity(
+          confirmation.value && confirmation.value !== password.value
+            ? "Mật khẩu nhập lại chưa khớp."
+            : "",
+        );
+      confirmation.oninput = checkConfirmation;
+      password.addEventListener("input", checkConfirmation);
+      tabs.querySelectorAll("button").forEach((tab) => {
+        tab.onclick = () => {
+          selectedRole = tab.dataset.role;
+          tabs.querySelectorAll("button").forEach((button) => {
+            const active = button === tab;
+            button.setAttribute("aria-selected", String(active));
+            button.tabIndex = active ? 0 : -1;
+          });
+          form.setAttribute("aria-labelledby", tab.id);
+          document.querySelector("#auth-error").textContent = "";
+        };
+        tab.onkeydown = (event) => {
+          if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            const target =
+              event.key === "Home"
+                ? tabs.firstElementChild
+                : event.key === "End"
+                  ? tabs.lastElementChild
+                  : tabs.querySelector(
+                      `[data-role="${selectedRole === "em" ? "anh" : "em"}"]`,
+                    );
+            target.click();
+            target.focus();
+          }
+        };
+      });
     }
     document.querySelector("#auth-switch").onclick = () =>
       authForm(mode === "login" ? "register" : "login");
     document.querySelector("#auth-form").onsubmit = async (e) => {
       e.preventDefault();
       const b = e.target.querySelector("button");
+      if (
+        mode === "register" &&
+        document.querySelector("#confirm-password").value !==
+          document.querySelector("#password").value
+      ) {
+        document.querySelector("#auth-error").textContent =
+          "Mật khẩu nhập lại chưa khớp.";
+        return;
+      }
       b.disabled = true;
       try {
+        const registrationRole = selectedRole;
         await cloud.authenticate(mode, {
           email: document.querySelector("#email").value,
           password: document.querySelector("#password").value,
           ...(mode === "register"
-            ? { name: document.querySelector("#account-name").value, role: document.querySelector("#register-role").value }
+            ? {
+                name: document.querySelector("#account-name").value,
+                role: registrationRole,
+              }
             : {}),
         });
+        let registrationMessage =
+          mode === "register"
+            ? "Đã tạo tài khoản."
+            : "Đã đăng nhập. Em có thể nhập dữ liệu khách từ Tài khoản.";
         close();
         afterLogin();
-        toast("Đã đăng nhập. Em có thể nhập dữ liệu khách từ Tài khoản.");
+        toast(registrationMessage);
       } catch (err) {
         document.querySelector("#auth-error").textContent = err.message;
         b.disabled = false;

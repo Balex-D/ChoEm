@@ -11,7 +11,7 @@ Bổ sung backend vào đúng bản `Cho-Em-main.zip` đã chỉnh sửa. Giữ 
 - IndexedDB giữ dữ liệu offline, tách theo tài khoản; đồng bộ lại khi mở app có mạng.
 - Kiểm tra revision, chặn ghi đè khi nhiều thiết bị sửa; màn hình chọn bản dữ liệu và xuất JSON dự phòng.
 - Nhập dữ liệu khách trên trình duyệt vào tài khoản khi người dùng chủ động chọn.
-- Mã mời/QR thật, mã dùng một lần, hạn 15 phút, kết nối hai tài khoản và ngắt kết nối.
+- Mã mời/QR thật, mã dùng một lần, hạn 2 phút, kết nối hai tài khoản và ngắt kết nối.
 - Chọn quyền chia sẻ chu kỳ, tâm trạng, ghi chú/triệu chứng; server lọc dữ liệu trước khi gửi người đồng hành.
 - Backend TypeScript chia module; SQL migration có kiểm tra checksum; Dockerfile, Compose local và production HTTPS.
 - 11 kiểm thử API/đồng bộ đã chạy qua; chi tiết và giới hạn tại [docs/TESTING.md](docs/TESTING.md).
@@ -77,10 +77,10 @@ Build chỉ biên dịch backend sang `server/build`; frontend trong `dist` đã
 
 ## 4. Dùng tài khoản và kết nối thật
 
-1. Bấm avatar góc trên để đăng ký hai tài khoản riêng. Mật khẩu tối thiểu 12 ký tự.
+1. Bấm avatar góc trên để đăng ký hai tài khoản riêng trong tab Em và Anh. Mật khẩu tối thiểu 6 ký tự và phải nhập lại khớp nhau.
 2. Mỗi tài khoản lưu dữ liệu riêng. Nếu đã có dữ liệu khách trên cùng trình duyệt/domain, mở Tài khoản → Nhập dữ liệu khách trên thiết bị. Đây là thao tác thay thế, có cảnh báo trước.
 3. Trên tài khoản chính, mở Người đồng hành → Tạo mã mời và QR. Chỉ gửi mã cho đúng người muốn kết nối.
-4. Tài khoản còn lại đăng nhập trên trình duyệt/thiết bị khác, mở link QR hoặc dán mã để chấp nhận.
+4. Tài khoản Anh đăng nhập trên trình duyệt/thiết bị khác, mở Người đồng hành → Quét QR bằng camera → Gửi yêu cầu liên kết. Có thể mở link QR hoặc dán mã thủ công. QR chỉ chứa mã mời, không chứa UUID Em; backend tự ánh xạ mã về tài khoản. Camera cần HTTPS hoặc localhost, hình ảnh không gửi lên máy chủ.
 5. Tài khoản chính bật từng mục muốn chia sẻ. Mặc định mọi cờ của tài khoản mới đều tắt. Người đồng hành chỉ đọc được ngày hiện tại.
 6. Đổi dữ liệu rồi bấm Làm mới ở góc người đồng hành để xem cập nhật. Bản thân dữ liệu của chủ tài khoản được đồng bộ tự động khi tab đang mở.
 7. Có thể ngắt kết nối từ một trong hai phía.

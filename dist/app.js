@@ -2,7 +2,7 @@ import { Cloud } from "./js/cloud.js";
 import { accountDialog } from "./js/account.js";
 import { renderConnections } from "./js/connections.js";
 let cloud;
-let pendingInvite = /^#invite=([a-f0-9]{64})$/.exec(location.hash)?.[1] || "";
+let pendingInvite = location.hash.startsWith("#invite=") ? location.href : "";
 if (pendingInvite) history.replaceState(null, "", location.pathname);
 const $ = (s) => document.querySelector(s);
 const paths = {
@@ -206,8 +206,10 @@ const tabs = [
   ["connect", "Người đồng hành", "heart"],
 ];
 function renderNav() {
+  const isAnh = cloud?.user?.role === "anh";
+  document.body.classList.toggle("companion-mode", isAnh);
   for (const id of ["nav", "mobile-nav"]) {
-    $("#" + id).innerHTML = tabs
+    $("#" + id).innerHTML = (isAnh ? tabs.filter(t => t[0] === "connect") : tabs)
       .map(
         ([v, t, i]) =>
           `<button data-view="${v}" class="${v === view ? "active" : ""}" ${v === view ? 'aria-current="page"' : ""}>${icon(i)}<span>${t}</span></button>`,
@@ -320,6 +322,7 @@ function bindCalendar() {
   );
 }
 function render() {
+  if (cloud?.user?.role === "anh") view = "connect";
   renderNav();
   if (view === "home") renderHome();
   if (view === "calendar") renderCalendar();
@@ -525,6 +528,7 @@ function renderConnect() {
   });
 }
 function settingsDialog() {
+  if (cloud?.user?.role === "anh") return openAccount();
   openDialog(
     `<h2>Một góc rất riêng ♡</h2><p>Điều chỉnh để Cho Em hiểu nhịp điệu của em hơn.</p><label class="form-label" for="name">Mình gọi em là</label><input id="name" maxlength="24" value="${escape(state.name)}"><label class="form-label" for="length">Độ dài chu kỳ (ngày)</label><input id="length" type="number" min="15" max="90" value="${state.length}"><label class="form-label" for="duration">Số ngày hành kinh</label><input id="duration" type="number" min="1" max="15" value="${state.duration}"><p>Ban đầu dùng 28 ngày / 5 ngày để ước tính. Em có thể thay đổi theo chu kỳ của mình.</p><button class="primary" id="save-settings">Lưu thay đổi</button>`,
   );
