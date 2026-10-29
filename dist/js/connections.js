@@ -180,27 +180,12 @@ export async function renderConnections({
     bind("[data-privacy]", async (b) => {
       const k = b.dataset.privacy,
         enabled = b.getAttribute("aria-checked") !== "true";
-      const apply = async () => {
-        await cloud.changePrivacy({
-          ...cloud.envelope.state.privacy,
-          [k]: enabled,
-        });
-        close();
-        await reload();
-        toast("Máy chủ đã cập nhật quyền chia sẻ.");
-      };
-      if (enabled && k !== "cycle") {
-        open(
-          `<h2>Chia sẻ ${escape(b.getAttribute("aria-label").toLowerCase())}?</h2><p>${owned ? `Người đồng hành <b>${escape(owned.name)}</b> sẽ xem được thông tin này của ngày hiện tại.` : "Thông tin này sẽ được chia sẻ với người đồng hành khi em kết nối."} Em có thể tắt lại khi có mạng.</p><button class="primary" id="confirm-sharing">Bật chia sẻ</button><p id="share-error" role="alert"></p>`,
-        );
-        document.querySelector("#confirm-sharing").onclick = async () => {
-          try {
-            await apply();
-          } catch (e) {
-            document.querySelector("#share-error").textContent = e.message;
-          }
-        };
-      } else await apply();
+      await cloud.changePrivacy({
+        ...cloud.envelope.state.privacy,
+        [k]: enabled,
+      });
+      await reload();
+      toast("Đã cập nhật quyền chia sẻ.");
     });
     if (incoming && isAnh) {
       let summaryRequest = 0;

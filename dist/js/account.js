@@ -22,7 +22,7 @@ export function accountDialog({
       return;
     }
     open(
-      `<h2>Tài khoản của em ♡</h2><p><b>${escape(cloud.user.email)}</b><br>${escape(cloud.status)}</p><p>Dữ liệu tài khoản được lưu trên máy chủ và giữ một bản trên thiết bị để dùng ngoại tuyến.</p>${cloud.conflict ? '<div class="demo-badge"><b>Hai thiết bị đã cùng thay đổi dữ liệu.</b><p>Xuất bản sao trước khi chọn. Giữ một bản sẽ thay thế toàn bộ bản còn lại; hệ thống không tự ghi đè.</p><button class="small-button" id="keep-local">Giữ bản thiết bị này</button> <button class="small-button" id="keep-server">Nhận bản máy chủ</button></div>' : ""}<div class="account-actions"><button class="small-button" id="sync-now">Đồng bộ ngay</button><button class="small-button" id="export-data">Xuất bản sao JSON</button><button class="small-button" id="import-guest">Nhập dữ liệu khách trên thiết bị</button><button class="small-button" id="password-form">Đổi mật khẩu</button><button class="small-button" id="logout-account">Đăng xuất & xóa bản lưu tài khoản</button></div><p>Bản lưu tài khoản trên thiết bị không có khóa riêng. Hãy đăng xuất khi dùng chung thiết bị.</p><p id="account-error" role="alert"></p>`,
+      `<h2>Tài khoản của em ♡</h2><p><b>${escape(cloud.user.email)}</b><br>${escape(cloud.status)}</p><p>Dữ liệu tài khoản được lưu trên máy chủ và giữ một bản trên thiết bị để dùng ngoại tuyến.</p>${cloud.conflict ? '<div class="demo-badge"><b>Hai thiết bị đã cùng thay đổi dữ liệu.</b><p>Xuất bản sao trước khi chọn. Giữ một bản sẽ thay thế toàn bộ bản còn lại; hệ thống không tự ghi đè.</p><button class="small-button" id="keep-local">Giữ bản thiết bị này</button> <button class="small-button" id="keep-server">Nhận bản máy chủ</button></div>' : ""}<div class="account-actions"><button class="small-button" id="sync-now">Đồng bộ ngay</button><button class="small-button" id="export-data">Xuất bản sao JSON</button><button class="small-button" id="import-guest">Nhập dữ liệu khách trên thiết bị</button><button class="small-button" id="password-form">Đổi mật khẩu</button><button class="small-button" id="logout-account">Đăng xuất</button></div><p>Đăng xuất chỉ xóa bản lưu trên thiết bị này. Tài khoản và dữ liệu đã đồng bộ vẫn được giữ; bạn có thể đăng nhập lại.</p><p id="account-error" role="alert"></p>`,
     );
     const run = (id, action) => {
       const el = document.querySelector("#" + id);
@@ -39,7 +39,7 @@ export function accountDialog({
         };
     };
     const roleControl = document.createElement("div");
-    roleControl.innerHTML = `<label class="form-label" for="account-role">Vai trò</label><select id="account-role"><option value="em">Em — tạo mã kết nối</option><option value="anh">Anh — nhập mã đồng hành</option></select><button class="small-button" id="save-role">Lưu vai trò</button>`;
+    roleControl.innerHTML = `<label class="form-label" for="account-role">Vai trò</label><select id="account-role"><option value="em">Em</option><option value="anh">Anh</option></select><button class="small-button" id="save-role">Lưu vai trò</button>`;
     document.querySelector(".account-actions").before(roleControl);
     document.querySelector("#account-role").value = cloud.user.role || "em";
     run("save-role", async () => {
@@ -78,7 +78,7 @@ export function accountDialog({
     run("logout-account", async () => {
       await cloud.logout();
       close();
-      toast("Đã đăng xuất và xóa bản lưu tài khoản trên thiết bị.");
+      toast("Đã đăng xuất. Dữ liệu đã đồng bộ vẫn được giữ trên tài khoản.");
     });
     document.querySelector("#password-form").onclick = () => {
       open(
