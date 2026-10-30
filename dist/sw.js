@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v6-companion-view";
+const CACHE = "cho-em-v11-auto-cycle-analysis";
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,10 +16,17 @@ const ASSETS = [
   "./assets/flower.png",
   "./assets/clover.png",
   "./assets/heart.png",
+  "./assets/greeting-star.png",
   "./js/connection-code.js",
   "./js/qr-scanner.js",
   "./js/invite-dialog.js",
   "./js/shared-view.js",
+  "./js/shared-details.js",
+  "./js/cycle-model.js",
+  "./js/cycle-analysis.js",
+  "./js/cycle-analysis-view.js",
+  "./js/period-records.js",
+  "./js/period-drag.js",
   "./vendor/jsqr.js",
 ];
 const ALLOWED = new Set(

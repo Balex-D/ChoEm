@@ -21,13 +21,15 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 | POST | `/auth/change-password` | `{currentPassword,newPassword}`; hủy các phiên cũ và cấp phiên mới |
 | GET | `/state` | `{state,revision}` của chính tài khoản |
 | PUT | `/state` | `{state,revision}`; đồng bộ snapshot nguyên tử; trả revision mới |
-| PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,notes}}`; trả state và revision mới |
+| PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,symptoms,notes},hideExistingJournals?}`; trả state và revision mới; tùy chọn ẩn nhật ký cũ chỉ dùng khi `notes=false` |
+| PATCH | `/state/entries/:date/sharing` | `{revision,shared}`; ẩn/hiện từng nhật ký của chính tài khoản, xác nhận từ server |
 | GET | `/connections` | Danh sách kết nối của chính tài khoản, tên đối phương và vai trò |
 | POST | `/connections/invites` | Chỉ Em chưa liên kết; trả `{code,token,url,qr,expiresAt}`; mã 6 ký tự A–Z/0–9 dùng một lần, hạn 2 phút; không trả UUID Em; `token` là alias của `code` |
 | DELETE | `/connections/invites` | Hủy lời mời đang chờ |
 | POST | `/connections/accept` | Chỉ Anh; `{ownerId,code}` từ QR, `{code}` cho mã 6 ký tự thủ công hoặc `{token}` cho client cũ; trả `{id}` khi liên kết thành công |
 | DELETE | `/connections/:id` | Chủ sở hữu hoặc người đồng hành ngắt kết nối |
 | GET | `/connections/:id/summary?date=YYYY-MM-DD` | Chỉ người đồng hành đã liên kết; chỉ ngày hiện tại theo Asia/Ho_Chi_Minh |
+| GET | `/connections/:id/shared?month=YYYY-MM` | Chỉ Anh đã liên kết; lịch theo tháng, tâm trạng/triệu chứng theo ngày và các nhật ký Em cho phép |
 | GET | `/healthz` (ngoài `/api`) | Kiểm tra app và kết nối database |
 
 Mỗi tài khoản có tối đa một liên kết Anh–Em. Backend khóa hai tài khoản theo thứ tự UUID trong transaction, kiểm tra vai trò hiện tại, UUID khớp chủ mã, thời hạn và kết nối đã tồn tại. Sau khi tạo quan hệ trong bảng `connections`, mã bị xóa trong cùng transaction. Các ràng buộc UNIQUE hiện có là lớp bảo vệ cuối chống trùng. Không tự thay người đồng hành hoặc bật quyền chia sẻ.
@@ -42,13 +44,26 @@ Camera dùng `getUserMedia` trên HTTPS/localhost, chỉ xin video sau khi Anh b
 
 ## Snapshot
 
+Phân tích tự động nằm trong `dist/js/cycle-analysis.js`, được PWA và backend dùng chung. Bỏ `length`/`duration` khỏi schema mới; request/cache cũ vẫn nhận nhưng bỏ qua các trường này. Migration `004_automatic_cycle_analysis.sql` bỏ cột cấu hình cũ, tăng revision cho thiết bị tải lại và giữ nguyên các bảng lịch sử thực tế. Tên cá nhân vẫn được lưu độc lập.
+
+- Trung bình chu kỳ: tối đa 6 khoảng cách giữa những lần bắt đầu thực tế gần nhất, làm tròn; cần ít nhất 2 lần bắt đầu. Trung bình hành kinh: tối đa 6 kỳ có ngày kết thúc thực tế, tính cả hai đầu, không tính kỳ đang diễn ra.
+- Dự kiến chỉ có khi tính được cả hai trung bình: bắt đầu gần nhất + trung bình chu kỳ; ngày cuối = ngày dự kiến + trung bình hành kinh − 1. Không dùng 28/5 mặc định, không tự nhân thêm các chu kỳ giả định khi chưa có ghi nhận mới. Rụng trứng ước tính hiện có chỉ hiển thị khi có dự kiến hợp lệ.
+- Nhận xét độ đều dùng biên độ tối đa–tối thiểu: chu kỳ ≤3 / 4–7 / >7 ngày. Để đáp ứng mục 4.1 của tài liệu, chỉ nhận xét khi có 3 khoảng chu kỳ hợp lệ (cần 4 ngày bắt đầu). Hành kinh cần 3 kỳ hoàn tất; biên độ ≤1 ngày là tương đối ổn định, từ 2 ngày là thay đổi. Không chẩn đoán.
+- `cycle_forecasts` giữ bản dự kiến theo ngày bắt đầu làm mốc, với `issued_at` do server cấp. Snapshot được vật hóa khi tải hồ sơ hoặc lưu thay đổi; ngày cấp không đổi nếu dự kiến không đổi. `forecasts` trong response là metadata chỉ đọc; giá trị client gửi lên bị bỏ qua. Nhật ký/chia sẻ không tự sửa ngày cấp. Xóa kỳ kinh sẽ dọn snapshot gắn với mốc bị xóa.
+- Chỉ so sánh kỳ thực tế gần nhất với snapshot của kỳ liền trước được lưu trước ngày bắt đầu mới (giờ Việt Nam); không tính ngược dự kiến. Chênh lệch tối đa 1 ngày là gần dự kiến; còn lại sớm/muộn theo số ngày. Không đủ bằng chứng thì không nhận xét. Guest dùng snapshot lưu cục bộ; backend không tin timestamp client.
+- Biểu đồ độ dài chu kỳ và số ngày hành kinh chỉ dùng tối đa 6 quan sát thực tế, có đường trung bình. Kỳ chưa kết thúc không vào biểu đồ hành kinh. Thiếu dữ liệu hiển thị `--`/“Chưa đủ dữ liệu”, không số giả định.
+
+`privacy.symptoms` là quyền xem triệu chứng; `privacy.notes` là mặc định chia sẻ của nhật ký mới. PWA khởi tạo `entry.shared` theo mặc định này khi ghi tâm trạng hoặc nhật ký mới; bài đã có `shared=false` luôn giữ lựa chọn riêng, kể cả bật mặc định lại. Nhật ký Anh xem được dựa vào `entry.shared`, không phụ thuộc mặc định hiện tại. Tắt mặc định áp dụng ngay cho ngày mới và hỏi có ẩn bài cũ không: giữ bài cũ thì giữ nguyên `shared`; chọn ẩn thì gửi `hideExistingJournals=true` và đặt tất cả bài đã lưu về `shared=false` trong cùng transaction, không xóa nội dung. Đóng popup giữ nguyên lựa chọn các bài cũ. Tâm trạng/triệu chứng được lọc riêng theo quyền tương ứng, cả trong bài nhật ký công khai. API tháng trả các ngày kinh thực tế, kỳ kinh dự kiến và rụng trứng ước tính khi bật `privacy.cycle`; không gửi toàn bộ state. Các kỳ kinh có ngày kết thúc thực tế, có thể sửa hoặc xóa qua snapshot; xóa kỳ kinh không xóa nhật ký. Chưa ghi ngày kết thúc của kỳ mới nhất thì vẫn coi là đang trong kỳ, không tự kết thúc sau số ngày mặc định.
+
+Migration `003_journal_visibility.sql` thêm quyền triệu chứng, mặc định ẩn nhật ký cũ và tăng revision để các thiết bị tải lại cấu trúc mới. Bật quyền nhật ký chung không tự hiện các bài cũ.
+
+Ghi nhận kéo và nút hành động cùng lưu `starts`/`ends` qua API snapshot hiện có, không cần bảng mới. `period-records.js` chuẩn hóa khoảng ngày, gộp các khoảng trùng/liền nhau; sửa khoảng cũ sẽ thay thế ngày bắt đầu/kết thúc tương ứng, xóa khoảng chỉ xóa kỳ kinh. Không có `ends[start]` ở kỳ mới nhất nghĩa là đang ghi nhận tới hôm nay. Kết thúc lưu hôm nay bao gồm cả ngày đầu và cuối; ngày tương lai chỉ là dự kiến. Dự báo dùng trung bình các khoảng chu kỳ và kỳ đã hoàn tất thực tế, không dùng cài đặt thủ công hay mặc định. Calendar, dữ liệu Anh được phép xem và thống kê cập nhật theo snapshot mới.
+
 ```json
 {
   "revision": 0,
   "state": {
     "name": "Em",
-    "length": 28,
-    "duration": 5,
     "starts": ["2025-01-01"],
     "ends": {"2025-01-01": "2025-01-05"},
     "entries": {
@@ -61,7 +76,7 @@ Camera dùng `getUserMedia` trên HTTPS/localhost, chỉ xin video sau khi Anh b
 
 Database có bảng riêng cho users, profiles, cycles, journal_entries, sessions, connection_invites, connections, rate_limits. Snapshot là giao thức đồng bộ thuận tiện cho frontend hiện có, không phải lưu toàn bộ database dưới dạng một chuỗi JSON.
 
-Dữ liệu được kiểm tra: ngày thực, ngày bắt đầu/kết thúc không ở tương lai, kết thúc sau bắt đầu và không lấn sang kỳ kế tiếp, độ dài chu kỳ 15–90, hành kinh 1–15 và nhỏ hơn chu kỳ, ghi chú tối đa 2000 ký tự, tối đa 1000 kỳ và 10000 ngày nhật ký, body tối đa 2 MB.
+Dữ liệu được kiểm tra: ngày thực, ngày bắt đầu/kết thúc không ở tương lai, kết thúc sau bắt đầu và không lấn sang kỳ kế tiếp, ghi chú tối đa 2000 ký tự, tối đa 1000 kỳ và 10000 ngày nhật ký, body tối đa 2 MB.
 
 ## Xung đột và giao dịch
 

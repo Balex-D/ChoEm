@@ -2,7 +2,7 @@
 
 ## Đã chạy
 
-- `npm test`: **25/25 test qua** (bao gồm mã mời ngắn, QR, đếm ngược và vòng đời camera).
+- `npm test`: **43/43 test qua** (bao gồm kéo khoảng ngày, bắt đầu/kết thúc, mặc định nhật ký, QR và vòng đời camera).
 - `npm run check`: TypeScript kiểm tra kiểu qua.
 - `npm run build`: biên dịch backend thành công.
 - `node --check` cho app.js, các module frontend mới và Service Worker: qua.
@@ -49,3 +49,22 @@ Các tình huống:
 - Kiểm tra /api không xuất hiện trong Cache Storage của trình duyệt.
 - Đổi mật khẩu: thiết bị khác cần đăng nhập lại; dữ liệu pending ở thiết bị đó không tự xóa.
 - Thử backup/restore trên môi trường thử nghiệm trước khi dùng dữ liệu cá nhân thật.
+
+## Chia sẻ lịch và nhật ký
+
+- Kiểm thử API tháng, phân quyền độc lập lịch/tâm trạng/triệu chứng/nhật ký; nhật ký ẩn không xuất hiện trong payload.
+- Kiểm tra đủ 16 tổ hợp quyền, xung đột revision khi đổi quyền từng bài, ngày kết thúc thực tế dài hơn mặc định và xóa kỳ kinh giữ nguyên nhật ký.
+
+## Ghi nhận kỳ kinh bằng kéo và nút hành động
+
+- Model kiểm thử: khoảng ngày tính cả hai đầu, kéo ngược, qua tháng, hợp nhất trùng/liền nhau, chỉnh ngày cuối, xóa mà giữ nhật ký, trạng thái đang ghi nhận sau serialize/reload và từ chối ngày tương lai/không hợp lệ.
+- Ví dụ dữ liệu thực tế 03/09–07/09 và 01/10–05/10 cho trung bình chu kỳ 28 ngày, hành kinh 5 ngày, dự kiến 29/10–02/11. Một kỳ đơn lẻ không tự tạo dự báo.
+- Đã kiểm thử Chrome headless thật ở màn hình 1280×1100 và touch emulation 430×932: giữ/kéo, preview, giữ mép lịch chuyển tháng, thu ngắn khoảng cũ, xóa, vị trí nút dưới ngày và trên ghi chú, bắt đầu, tải lại và kết thúc hôm nay. Tài khoản thử riêng đã được xóa sau kiểm tra.
+- Touch emulation chưa thay thế kiểm tra trên điện thoại vật lý, đặc biệt Safari/iOS.
+
+## Phân tích tự động theo prompt.pdf
+
+- 43 test qua, bổ sung kiểm tra không có mặc định khi thiếu dữ liệu, tối đa 6 khoảng chu kỳ/kỳ hoàn tất, làm tròn, loại kỳ đang diễn ra, ngưỡng nhận xét và snapshot trước thời điểm bắt đầu thực tế.
+- Migration thử trên database đã có cấu hình cũ, kỳ kinh và nhật ký: bỏ hai cột cấu hình, giữ nguyên lịch sử, tên và quyền chia sẻ; request cũ có length/duration vẫn nhận nhưng bỏ qua. Client không thể giả mạo forecast đã lưu bằng JSON gửi lên.
+- Kiểm thử Chrome headless desktop và bố cục 430×932: rỗng hiển thị bốn chỉ số --; modal chỉ giữ tên; dữ liệu thực tế cho trung bình 28/5 và dự kiến đúng 24/04–28/04; hai biểu đồ có đúng số quan sát, loại kỳ chưa kết thúc; một kỳ hoàn tất chỉ tính được ngày hành kinh, không sinh chu kỳ hoặc dự báo. Không tràn ngang trên bố cục điện thoại.
+- Đối chiếu SHA-256 của toàn bộ hàng cycles/journal_entries trước và sau migration trên localhost trùng khớp. Tài khoản Chrome thử nghiệm đã được dọn, không thay lịch sử hay tài khoản có sẵn.

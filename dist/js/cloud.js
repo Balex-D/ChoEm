@@ -98,6 +98,7 @@ export class Cloud {
     const userId = this.user.id;
     try {
       this.changed("Đang đồng bộ…");
+      let forecastsUpdated = false;
       while (this.user?.id === userId && this.envelope.dirty) {
         const seq = this.sequence,
           snapshot = clone(this.envelope.state),
@@ -108,6 +109,14 @@ export class Cloud {
         });
         if (this.user?.id !== userId) return;
         this.envelope.revision = saved.revision;
+        if (Array.isArray(saved.forecasts)) {
+          forecastsUpdated ||=
+            JSON.stringify(this.envelope.state.forecasts || []) !==
+            JSON.stringify(saved.forecasts);
+          this.envelope.state.forecasts = clone(saved.forecasts);
+          const local = this.hooks.local?.();
+          if (local) local.forecasts = clone(saved.forecasts);
+        }
         this.envelope.dirty = seq !== this.sequence;
         await this.storage.set("account:" + userId, this.envelope);
       }
@@ -127,6 +136,8 @@ export class Cloud {
         }
       }
       this.changed(this.envelope.dirty ? "Chờ đồng bộ" : "Đã đồng bộ");
+      if (forecastsUpdated && this.hooks.canRefresh() && !this.envelope.dirty)
+        this.hooks.remote(clone(this.envelope.state));
     } catch (e) {
       if (this.user?.id !== userId) return;
       if (e.code === "SYNC_CONFLICT") {
@@ -174,7 +185,7 @@ export class Cloud {
     this.hooks.remote(clone(imported));
     await this.sync();
   }
-  async changePrivacy(privacy) {
+  async changePrivacy(privacy, { hideExistingJournals = false } = {}) {
     if (!this.user || !navigator.onLine)
       throw new Error("Cần đăng nhập và có mạng để thay đổi quyền chia sẻ.");
     await this.sync();
@@ -182,12 +193,27 @@ export class Cloud {
       throw new Error("Hãy xử lý đồng bộ trước khi đổi quyền chia sẻ.");
     const result = await api("/state/privacy", {
       method: "PATCH",
-      body: { revision: this.envelope.revision, privacy },
+      body: { revision: this.envelope.revision, privacy, hideExistingJournals },
     });
     this.envelope = { ...result, dirty: false };
     await this.storage.set("account:" + this.user.id, this.envelope);
     this.hooks.remote(clone(result.state));
     this.changed("Đã cập nhật quyền chia sẻ");
+  }
+  async changeEntrySharing(date, shared) {
+    if (!this.user || !navigator.onLine)
+      throw new Error("Cần đăng nhập và có mạng để đổi quyền nhật ký.");
+    await this.sync();
+    if (this.conflict || this.envelope.dirty)
+      throw new Error("Hãy xử lý đồng bộ trước khi đổi quyền nhật ký.");
+    const result = await api("/state/entries/" + date + "/sharing", {
+      method: "PATCH",
+      body: { revision: this.envelope.revision, shared },
+    });
+    this.envelope = { ...result, dirty: false };
+    await this.storage.set("account:" + this.user.id, this.envelope);
+    this.hooks.remote(clone(result.state));
+    this.changed("Đã cập nhật quyền nhật ký");
   }
   exportData() {
     const payload = {

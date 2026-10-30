@@ -14,6 +14,7 @@ test("companion view displays only each category permitted by Em", () => {
       cycle: Boolean(mask & 1),
       mood: Boolean(mask & 2),
       notes: Boolean(mask & 4),
+      symptoms: Boolean(mask & 4),
     };
     const summary = sharedSummary(
       {
@@ -27,6 +28,7 @@ test("companion view displays only each category permitted by Em", () => {
             mood: "Vui vẻ",
             symptoms: ["Biểu hiện riêng"],
             note: "<script>private-note</script>",
+            shared: privacy.notes,
           },
         },
         privacy,

@@ -6,6 +6,8 @@ import type { Database, Queryable } from "../src/db/database.js";
 import { createApp } from "../src/app.js";
 import { migrate } from "../src/db/migrate.js";
 import { hashToken } from "../src/common/security.js";
+// @ts-ignore Shared deterministic analysis.
+import { analyzeCycles } from "../../dist/js/cycle-analysis.js";
 import {
   issueInvite,
   generateInviteCode,
@@ -254,7 +256,7 @@ test("validation rejects impossible dates, future cycles, overlaps and invalid n
     { ...sample(), starts: ["2025-02-30"], ends: {} },
     { ...sample(), starts: ["2199-01-01"], ends: {} },
     { ...sample(), starts: ["2025-01-01", "2025-01-03"] },
-    { ...sample(), duration: 15, length: 15 },
+    { ...sample(), ends: { "2025-02-01": "2025-02-03" } },
     { ...sample(), entries: { "2025-01-01": { note: "x".repeat(2001) } } },
   ])
     assert.equal(
@@ -264,6 +266,74 @@ test("validation rejects impossible dates, future cycles, overlaps and invalid n
     );
   assert.equal((await agent.get("/api/state")).body.revision, 0);
 });
+test("legacy settings are ignored and forecast evidence is server-owned and preserved before a new start", async () => {
+  const { agent, id } = await user("automatic-analysis@example.com");
+  const initial = {
+    ...sample(),
+    length: 90,
+    duration: 15,
+    starts: ["2025-01-01", "2025-01-29"],
+    ends: { "2025-01-01": "2025-01-05", "2025-01-29": "2025-02-02" },
+    forecasts: [
+      {
+        anchor: "2025-01-29",
+        start: "2025-02-01",
+        end: "2025-02-02",
+        issuedAt: "2020-01-01T00:00:00Z",
+      },
+    ],
+  };
+  const saved = await mutate(agent, "put", "/api/state", {
+    revision: 0,
+    state: initial,
+  });
+  assert.equal(saved.status, 200);
+  const read = await agent.get("/api/state");
+  assert.equal("length" in read.body.state, false);
+  assert.equal("duration" in read.body.state, false);
+  assert.equal(read.body.state.forecasts[0].start, "2025-02-26");
+  assert.ok(
+    Date.parse(read.body.state.forecasts[0].issuedAt) >
+      Date.parse("2020-01-01"),
+  );
+  const issued = read.body.state.forecasts[0].issuedAt;
+  assert.equal(
+    (await agent.get("/api/state")).body.state.forecasts[0].issuedAt,
+    issued,
+  );
+  await db.query("UPDATE cycle_forecasts SET issued_at=$2 WHERE user_id=$1", [
+    id,
+    "2025-02-01T12:00:00Z",
+  ]);
+  const next = {
+    ...initial,
+    starts: [...initial.starts, "2025-03-01"],
+    ends: { ...initial.ends, "2025-03-01": "2025-03-05" },
+  };
+  assert.equal(
+    (await mutate(agent, "put", "/api/state", { revision: 1, state: next }))
+      .status,
+    200,
+  );
+  const actual = (await agent.get("/api/state")).body.state;
+  assert.match(analyzeCycles(actual, today()).timingNotice, /muộn.*3 ngày/);
+  assert.equal(
+    actual.forecasts.find((item: any) => item.anchor === "2025-01-29").issuedAt,
+    "2025-02-01T12:00:00.000Z",
+  );
+  assert.equal(
+    (await mutate(agent, "put", "/api/state", { revision: 2, state: initial }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await agent.get("/api/state")).body.state.forecasts.some(
+      (item: any) => item.anchor === "2025-03-01",
+    ),
+    false,
+  );
+});
+
 test("single-use hashed invites; privacy enforced before sending companion data", async () => {
   const a = await user("a@example.com"),
     b = await user("b@example.com", "anh"),
@@ -276,6 +346,7 @@ test("single-use hashed invites; privacy enforced before sending companion data"
           mood: "Mệt mỏi",
           symptoms: ["Đau đầu"],
           note: "sensitive-note",
+          shared: false,
         },
       },
     };
@@ -318,6 +389,10 @@ test("single-use hashed invites; privacy enforced before sending companion data"
     revision: 1,
     privacy: { cycle: true, mood: true, notes: true },
   });
+  await mutate(a.agent, "patch", `/api/state/entries/${date}/sharing`, {
+    revision: 2,
+    shared: true,
+  });
   const shown = await b.agent.get(route);
   assert.equal(shown.body.summary.note, "sensitive-note");
   assert.equal(shown.body.summary.mood, "Mệt mỏi");
@@ -329,8 +404,9 @@ test("single-use hashed invites; privacy enforced before sending companion data"
     400,
   );
   await mutate(a.agent, "patch", "/api/state/privacy", {
-    revision: 2,
+    revision: 3,
     privacy: { cycle: false, mood: false, notes: false },
+    hideExistingJournals: true,
   });
   assert.equal("note" in (await b.agent.get(route)).body.summary, false);
   assert.equal(
@@ -343,6 +419,244 @@ test("single-use hashed invites; privacy enforced before sending companion data"
   );
   assert.equal((await b.agent.get(route)).status, 404);
 });
+test("journal default can be disabled while keeping old shares or hiding them atomically", async () => {
+  const em = await user("journal-default-em@example.com");
+  const anh = await user("journal-default-anh@example.com", "anh");
+  const initial = {
+    ...sample(),
+    privacy: { cycle: false, mood: false, symptoms: false, notes: true },
+    entries: {
+      "2025-01-03": {
+        mood: "",
+        symptoms: [],
+        note: "old-shared",
+        shared: true,
+      },
+      "2025-01-04": {
+        mood: "",
+        symptoms: [],
+        note: "private-override",
+        shared: false,
+      },
+    },
+  };
+  assert.equal(
+    (
+      await mutate(em.agent, "put", "/api/state", {
+        revision: 0,
+        state: initial,
+      })
+    ).status,
+    200,
+  );
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  const linked = await mutate(anh.agent, "post", "/api/connections/accept", {
+    code: invite.body.code,
+  });
+  const route = `/api/connections/${linked.body.id}/shared?month=2025-01`;
+  const disabled = await mutate(em.agent, "patch", "/api/state/privacy", {
+    revision: 1,
+    privacy: { ...initial.privacy, notes: false },
+  });
+  assert.equal(disabled.status, 200);
+  assert.equal(disabled.body.state.privacy.notes, false);
+  assert.deepEqual(
+    (await anh.agent.get(route.replace("2025-01", "2025-02"))).body.shared
+      .journal,
+    [],
+  );
+  assert.deepEqual(
+    (await anh.agent.get(route)).body.shared.journal.map(
+      (entry: any) => entry.note,
+    ),
+    ["old-shared"],
+  );
+  assert.equal(disabled.body.state.entries["2025-01-04"].shared, false);
+  const hide = await mutate(em.agent, "patch", "/api/state/privacy", {
+    revision: 2,
+    privacy: { ...initial.privacy, notes: false },
+    hideExistingJournals: true,
+  });
+  assert.equal(hide.status, 200);
+  assert.equal(hide.body.state.entries["2025-01-03"].note, "old-shared");
+  assert.equal(hide.body.state.entries["2025-01-03"].shared, false);
+  assert.equal("journal" in (await anh.agent.get(route)).body.shared, false);
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/privacy", {
+        revision: 2,
+        privacy: { ...initial.privacy, notes: false },
+        hideExistingJournals: true,
+      })
+    ).status,
+    409,
+  );
+  const enabled = await mutate(em.agent, "patch", "/api/state/privacy", {
+    revision: 3,
+    privacy: initial.privacy,
+  });
+  assert.equal(enabled.status, 200);
+  assert.equal(enabled.body.state.entries["2025-01-03"].shared, false);
+  assert.equal((await anh.agent.get(route)).body.shared.journal.length, 0);
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/privacy", {
+        revision: 4,
+        privacy: initial.privacy,
+        hideExistingJournals: true,
+      })
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/entries/2025-01-03/sharing", {
+        revision: 4,
+        shared: true,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (await anh.agent.get(route)).body.shared.journal[0].note,
+    "old-shared",
+  );
+});
+
+test("monthly companion data enforces independent permissions and per-entry journal visibility", async () => {
+  const em = await user("monthly-em@example.com");
+  const anh = await user("monthly-anh@example.com", "anh");
+  const outsider = await user("monthly-other@example.com", "anh");
+  const state = {
+    ...sample(),
+    starts: ["2024-12-04", "2025-01-01"],
+    ends: { "2024-12-04": "2024-12-13", "2025-01-01": "2025-01-10" },
+    privacy: { cycle: true, mood: true, symptoms: true, notes: true },
+    entries: {
+      "2025-01-03": {
+        mood: "Vui vẻ",
+        symptoms: ["Đau đầu"],
+        note: "public-entry",
+        shared: true,
+      },
+      "2025-01-04": {
+        mood: "Mệt mỏi",
+        symptoms: ["Đau bụng"],
+        note: "NEVER-SEND-PRIVATE-NOTE",
+        shared: false,
+      },
+    },
+  };
+  assert.equal(
+    (await mutate(em.agent, "put", "/api/state", { revision: 0, state }))
+      .status,
+    200,
+  );
+  const invite = await mutate(em.agent, "post", "/api/connections/invites");
+  const linked = await mutate(anh.agent, "post", "/api/connections/accept", {
+    code: invite.body.code,
+  });
+  const route = `/api/connections/${linked.body.id}/shared?month=2025-01`;
+  assert.equal((await request(app).get(route)).status, 401);
+  assert.equal((await outsider.agent.get(route)).status, 404);
+  assert.equal((await em.agent.get(route)).status, 404);
+  const response = await anh.agent.get(route);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers["cache-control"], "no-store");
+  assert.equal(
+    JSON.stringify(response.body).includes("NEVER-SEND-PRIVATE-NOTE"),
+    false,
+  );
+  assert.equal(
+    response.body.shared.calendar.find((d: any) => d.date === "2025-01-09")
+      .type,
+    "period",
+  );
+  assert.equal(
+    response.body.shared.calendar.find((d: any) => d.date === "2025-01-15")
+      .type,
+    "ovulation",
+  );
+  assert.equal(
+    response.body.shared.calendar.find((d: any) => d.date === "2025-01-29")
+      .type,
+    "predicted",
+  );
+  assert.equal(response.body.shared.journal.length, 1);
+  assert.equal(response.body.shared.moods["2025-01-04"], "Mệt mỏi");
+  const hidden = await mutate(
+    em.agent,
+    "patch",
+    "/api/state/entries/2025-01-03/sharing",
+    { revision: 1, shared: false },
+  );
+  assert.equal(hidden.status, 200);
+  assert.equal((await anh.agent.get(route)).body.shared.journal.length, 0);
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/entries/2025-01-03/sharing", {
+        revision: 1,
+        shared: true,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await mutate(
+        outsider.agent,
+        "patch",
+        "/api/state/entries/2025-01-03/sharing",
+        { revision: 0, shared: true },
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/entries/2025-01-03/sharing", {
+        revision: 2,
+        shared: true,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await mutate(em.agent, "patch", "/api/state/privacy", {
+        revision: 3,
+        privacy: { cycle: false, mood: false, symptoms: false, notes: true },
+      })
+    ).status,
+    200,
+  );
+  const journalOnly = (await anh.agent.get(route)).body.shared;
+  assert.equal("calendar" in journalOnly, false);
+  assert.equal("moods" in journalOnly, false);
+  assert.equal("symptoms" in journalOnly, false);
+  assert.equal("mood" in journalOnly.journal[0], false);
+  assert.equal("symptoms" in journalOnly.journal[0], false);
+  assert.equal(
+    (await anh.agent.get(route.replace("2025-01", "2025-13"))).status,
+    400,
+  );
+  const saved = (await em.agent.get("/api/state")).body;
+  const removed = { ...saved.state, starts: [], ends: {} };
+  assert.equal(
+    (
+      await mutate(em.agent, "put", "/api/state", {
+        revision: saved.revision,
+        state: removed,
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    Object.keys((await em.agent.get("/api/state")).body.state.entries).length,
+    2,
+  );
+});
+
 test("QR round trip validates UUID and code before linking; duplicate links are rejected", async () => {
   const em = await user("qr-em@example.com");
   const otherEm = await user("qr-other@example.com");

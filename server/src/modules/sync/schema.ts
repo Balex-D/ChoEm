@@ -9,8 +9,6 @@ export const dateSchema = z
 export const stateSchema = z
   .object({
     name: z.string().trim().min(1).max(24),
-    length: z.number().int().min(15).max(90),
-    duration: z.number().int().min(1).max(15),
     symptomSuggestions: z
       .array(z.string().trim().min(1).max(60))
       .max(50)
@@ -33,19 +31,19 @@ export const stateSchema = z
           .default(""),
         symptoms: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
         note: z.string().max(2000).default(""),
+        shared: z.boolean().default(false),
       }),
     ),
     privacy: z.object({
       cycle: z.boolean(),
       mood: z.boolean(),
       notes: z.boolean(),
+      symptoms: z.boolean().default(false),
     }),
   })
   .superRefine((state, ctx) => {
     const error = (message: string) =>
       ctx.addIssue({ code: "custom", message });
-    if (state.duration >= state.length)
-      error("Số ngày hành kinh phải nhỏ hơn chu kỳ");
     if (new Set(state.starts).size !== state.starts.length)
       error("Ngày bắt đầu bị trùng");
     if (
@@ -69,7 +67,15 @@ export const stateSchema = z
       if (next && end >= next) error("Các kỳ kinh không được chồng ngày");
     }
   });
-export type AppState = z.infer<typeof stateSchema>;
+export type CycleForecast = {
+  anchor: string;
+  start: string;
+  end: string;
+  issuedAt: string;
+};
+export type AppState = z.infer<typeof stateSchema> & {
+  forecasts?: CycleForecast[];
+};
 export const writeSchema = z.object({
   revision: z.number().int().min(0).max(2147483646),
   state: stateSchema,

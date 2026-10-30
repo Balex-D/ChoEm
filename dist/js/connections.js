@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { invitationDialog } from "./invite-dialog.js";
-import { renderSharedSummary } from "./shared-view.js";
+import { renderSharedDetails } from "./shared-details.js";
 import { parseConnectionCode } from "./connection-code.js";
 import { scanConnectionQR } from "./qr-scanner.js";
 export async function renderConnections({
@@ -32,15 +32,16 @@ export async function renderConnections({
     root.innerHTML = `<div class="connect-grid"><section class="card"><h3>♡ Người em chọn chia sẻ</h3>${owned ? `<p>Đang chia sẻ với <b>${escape(owned.name)}</b>.</p><button class="small-button" data-unlink="${owned.id}">Ngắt kết nối</button>` : '<p>Tạo một lời mời riêng. Mã dùng một lần, hết hạn sau 2 phút. Chỉ gửi mã cho người em muốn kết nối.</p><button class="primary full-width" id="create-invite">Tạo mã mời và QR</button><button class="text-button" id="cancel-invite">Hủy mã mời đang chờ</button>'}<hr><h3>Em chọn điều muốn chia sẻ</h3>${[
       ["cycle", "Trạng thái chu kỳ"],
       ["mood", "Tâm trạng hôm nay"],
-      ["notes", "Ghi chú và triệu chứng"],
+      ["symptoms", "Triệu chứng"],
+      ["notes", "Nhật ký"],
     ]
       .map(
         ([k, t]) =>
-          `<div class="toggle-row"><span>${t}</span><button class="toggle" data-privacy="${k}" role="switch" aria-label="${t}" aria-checked="${cloud.envelope?.state.privacy[k] || false}"></button></div>`,
+          `<div class="toggle-row"><span>${t}${k === "notes" ? ' <button class="journal-info" id="journal-sharing-info" aria-label="Tìm hiểu về chia sẻ nhật ký">!</button>' : ""}</span><button class="toggle" data-privacy="${k}" role="switch" aria-label="${t}" aria-checked="${cloud.envelope?.state.privacy[k] || false}"></button></div>`,
       )
       .join(
         "",
-      )}<p>Chỉ ngày hiện tại được chia sẻ. Đổi quyền cần có mạng và máy chủ xác nhận.</p></section><section class="card"><h3>Góc của người đồng hành</h3>${incoming ? `<p>Anh đang đồng hành cùng <b>${escape(incoming.name)}</b>.</p><div id="shared-summary"><p>Đang tải trạng thái…</p></div><button class="small-button" id="refresh-summary">Làm mới</button> <button class="text-button" data-unlink="${incoming.id}">Ngắt kết nối</button>` : `<p>Nhập mã người ấy gửi, hoặc mở liên kết từ mã QR bằng camera điện thoại.</p><label class="form-label" for="invite-code">Mã mời</label><input id="invite-code" autocomplete="off" spellcheck="false" maxlength="64" value="${escape(pendingInvite || "")}" placeholder="Dán mã mời tại đây"><button class="primary full-width" id="accept-invite">Chấp nhận lời mời</button>`}</section></div><p id="connection-error" role="alert"></p>`;
+      )}</section><section class="card"><h3>Góc của người đồng hành</h3>${incoming ? `<p>Anh đang đồng hành cùng <b>${escape(incoming.name)}</b>.</p><div id="shared-summary"><p>Đang tải trạng thái…</p></div><button class="small-button" id="refresh-summary">Làm mới</button> <button class="text-button" data-unlink="${incoming.id}">Ngắt kết nối</button>` : `<p>Nhập mã người ấy gửi, hoặc mở liên kết từ mã QR bằng camera điện thoại.</p><label class="form-label" for="invite-code">Mã mời</label><input id="invite-code" autocomplete="off" spellcheck="false" maxlength="64" value="${escape(pendingInvite || "")}" placeholder="Dán mã mời tại đây"><button class="primary full-width" id="accept-invite">Chấp nhận lời mời</button>`}</section></div><p id="connection-error" role="alert"></p>`;
     const isAnh = cloud.user.role === "anh";
     const sections = root.querySelectorAll(".connect-grid > section");
     sections[isAnh ? 0 : 1].remove();
@@ -115,6 +116,12 @@ export async function renderConnections({
           }),
       );
     bind("#refresh-connections", reload);
+    bind("#journal-sharing-info", async () => {
+      open(
+        '<h2>Những trang nhỏ gửi Anh ♡</h2><p>Chia sẻ với Anh những dòng nhật ký để Anh hiểu và thương Em hơn. Khi nào muốn giữ cho riêng mình, Em vẫn có thể dễ dàng ẩn đi bằng cách ấn vào bài đó, rồi mở lại bất cứ khi nào Em muốn.</p><button class="primary" id="journal-info-done">Em hiểu rồi ♡</button>',
+      );
+      document.querySelector("#journal-info-done").onclick = close;
+    });
     bind("#create-invite", async () => {
       const invite = await api("/connections/invites", {
         method: "POST",
@@ -186,9 +193,72 @@ export async function renderConnections({
       });
       await reload();
       toast("Đã cập nhật quyền chia sẻ.");
+      if (k === "notes" && !enabled) {
+        open(
+          '<h2>Cất những trang cũ cho riêng Em</h2><p>Từ những ngày sau, nhật ký mới sẽ mặc định dành riêng cho Em. Còn những trang đã gửi Anh, Em muốn giữ lại để Anh đọc, hay cất tất cả vào góc nhỏ riêng của mình?</p><button class="primary" id="hide-old-journals">Ẩn tất cả nhật ký cũ</button><button class="small-button" id="keep-old-journals">Giữ lại cho Anh</button><p id="journal-choice-error" role="alert"></p>',
+        );
+        document.querySelector("#keep-old-journals").onclick = close;
+        document.querySelector("#hide-old-journals").onclick = async (
+          event,
+        ) => {
+          event.target.disabled = true;
+          try {
+            await cloud.changePrivacy(cloud.envelope.state.privacy, {
+              hideExistingJournals: true,
+            });
+            close();
+            await reload();
+            toast("Đã cất những trang cũ vào góc riêng của Em ♡");
+          } catch (error) {
+            document.querySelector("#journal-choice-error").textContent =
+              error.message;
+            event.target.disabled = false;
+          }
+        };
+      }
     });
     if (incoming && isAnh) {
       let summaryRequest = 0;
+      let selected = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      let selectedMonth = selected.slice(0, 7);
+      let sharedData = null;
+      root.addEventListener("change", (event) => {
+        if (
+          event.target.id === "shared-month" &&
+          event.target.validity.valid &&
+          /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)
+        ) {
+          selectedMonth = event.target.value;
+          selected = selectedMonth + "-01";
+          void summary();
+        }
+        if (
+          event.target.id === "shared-date-picker" &&
+          event.target.validity.valid &&
+          event.target.value.startsWith(selectedMonth + "-")
+        ) {
+          selected = event.target.value;
+          if (sharedData)
+            root.querySelector("#shared-summary").innerHTML =
+              renderSharedDetails(sharedData, selected, escape);
+        }
+      });
+      root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-shared-day]");
+        if (button && sharedData) {
+          selected = button.dataset.sharedDay;
+          root.querySelector("#shared-summary").innerHTML = renderSharedDetails(
+            sharedData,
+            selected,
+            escape,
+          );
+        }
+      });
       const summary = async () => {
         const request = ++summaryRequest;
         const date = new Intl.DateTimeFormat("en-CA", {
@@ -198,8 +268,8 @@ export async function renderConnections({
           day: "2-digit",
         }).format(new Date());
         try {
-          const { summary: s } = await api(
-            "/connections/" + incoming.id + "/summary?date=" + date,
+          const { shared: s } = await api(
+            "/connections/" + incoming.id + "/shared?month=" + selectedMonth,
           );
           if (
             !root.isConnected ||
@@ -207,14 +277,17 @@ export async function renderConnections({
             document.hidden
           )
             return;
-          root.querySelector("#shared-summary").innerHTML = renderSharedSummary(
+          sharedData = s;
+          root.querySelector("#shared-summary").innerHTML = renderSharedDetails(
             s,
+            selected,
             escape,
           );
           root.querySelector("#connection-error").textContent = "";
         } catch (error) {
           if (!root.isConnected || request !== summaryRequest) return;
           root.querySelector("#shared-summary").replaceChildren();
+          sharedData = null;
           if (error.status === 404) await reload();
           else showError(error);
         }

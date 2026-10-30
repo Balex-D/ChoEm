@@ -10,7 +10,7 @@ import { issueInvite } from "./invites.js";
 import { HttpError } from "../../common/errors.js";
 import { dateSchema } from "../sync/schema.js";
 import { readState } from "../sync/repository.js";
-import { sharedSummary } from "./service.js";
+import { sharedSummary, sharedDetails } from "./service.js";
 export function connectionRoutes(db: Database, c: Config) {
   const router = Router();
   router.use(authenticate(db));
@@ -202,6 +202,38 @@ export function connectionRoutes(db: Database, c: Config) {
       ]);
     });
     res.status(204).end();
+  });
+  router.get("/:id/shared", async (req, res) => {
+    const id = z.string().uuid().parse(req.params.id);
+    const month = z
+      .string()
+      .regex(/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/)
+      .parse(req.query.month);
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    const shared = await db.transaction(async (q) => {
+      const {
+        rows: [link],
+      } = await q.query(
+        "SELECT owner_id FROM connections WHERE id=$1 AND companion_id=$2 FOR SHARE",
+        [id, req.user!.id],
+      );
+      if (!link)
+        throw new HttpError(404, "NOT_FOUND", "Không tìm thấy kết nối.");
+      await q.query("SELECT user_id FROM profiles WHERE user_id=$1 FOR SHARE", [
+        link.owner_id,
+      ]);
+      return sharedDetails(
+        (await readState(q, link.owner_id)).state,
+        today,
+        month,
+      );
+    });
+    res.json({ shared });
   });
   router.get("/:id/summary", async (req, res) => {
     const id = z.string().uuid().parse(req.params.id);
