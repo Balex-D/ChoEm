@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v13-period-estimates";
+const CACHE = "cho-em-v14-selected-period-end";
 const ASSETS = [
   "./",
   "./index.html",

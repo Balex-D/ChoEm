@@ -507,7 +507,7 @@ function handlePeriodAction(day) {
   const existing = periodContaining(state,day,todayKey);
   if (existing && !existing.ongoing) return editPeriodDialog(existing.start);
   const active = ongoingPeriod(state,todayKey);
-  if (active && day >= active.start) return savePeriodChange(current => finishPeriod(current,active.start,todayKey,todayKey), todayKey);
+  if (active && day >= active.start) return savePeriodChange(current => finishPeriod(current,active.start,day,todayKey), day);
   return savePeriodChange(current => beginPeriod(current,day,todayKey), day);
 }
 function renderPeriodControls() {
@@ -520,7 +520,7 @@ function renderPeriodControls() {
   const future = selected > todayKey;
   const panel = document.createElement("div");
   panel.className = "period-action-panel";
-  panel.innerHTML = `<button class="primary" id="selected-period-action" ${future ? "disabled" : ""}>${recorded ? "Chỉnh sửa kỳ kinh" : ending ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button><p>${future ? "Ngày tương lai chỉ hiển thị dự kiến. Em có thể ghi nhận khi ngày đó đến." : completed ? `Đã hoàn tất · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start,existing.end)} ngày hành kinh` : recorded ? `Đã ghi ngày bắt đầu ${existing.start}. Em bổ sung ngày kết thúc để tính thời gian hành kinh thực tế nhé.` : ending ? `Đang ghi nhận từ ${active.start} · ${periodDayCount(active.start,todayKey)} ngày. Nhấn kết thúc để lấy hôm nay làm ngày cuối cùng.` : "Ghi nhận ngày đang chọn là ngày bắt đầu kỳ kinh."}</p>${existing ? '<button class="text-button" id="adjust-period-range">Sửa khoảng ngày</button> <button class="text-button" id="remove-selected-period">Xóa khoảng đã ghi</button>' : ""}`;
+  panel.innerHTML = `<button class="primary" id="selected-period-action" ${future ? "disabled" : ""}>${recorded ? "Chỉnh sửa kỳ kinh" : ending ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button><p>${future ? "Ngày tương lai chỉ hiển thị dự kiến. Em có thể ghi nhận khi ngày đó đến." : completed ? `Đã hoàn tất · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start,existing.end)} ngày hành kinh` : recorded ? `Đã ghi ngày bắt đầu ${existing.start}. Em bổ sung ngày kết thúc để tính thời gian hành kinh thực tế nhé.` : ending ? `Đang ghi nhận từ ${active.start} · ${periodDayCount(active.start,todayKey)} ngày. Nhấn kết thúc để lấy ngày ${parse(selected).toLocaleDateString("vi-VN")} đang chọn làm ngày cuối cùng.` : "Ghi nhận ngày đang chọn là ngày bắt đầu kỳ kinh."}</p>${existing ? '<button class="text-button" id="adjust-period-range">Sửa khoảng ngày</button> <button class="text-button" id="remove-selected-period">Xóa khoảng đã ghi</button>' : ""}`;
   if (estimated) panel.querySelector("p").textContent = `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
   $(".day-details > b").after(panel);
   panel.querySelector("#selected-period-action").onclick = async event => { event.target.disabled = true; await handlePeriodAction(selected); if(event.target.isConnected) event.target.disabled = future; };

@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 // @ts-ignore Pure PWA period model.
 import {
   recordPeriodRange,
@@ -9,12 +11,43 @@ import {
   removePeriod,
   periodDayCount,
   ongoingPeriod,
+  periodContaining,
   resolvePeriods,
 } from "../../dist/js/period-records.js";
 // @ts-ignore Calendar shares the exact model used by the UI.
 import { cycleDayType, calendarMonth } from "../../dist/js/cycle-model.js";
 import { stateSchema } from "../src/modules/sync/schema.js";
 const today = "2025-11-15";
+test("calendar button respects selected end and today button still ends today", () => {
+  const source = readFileSync("dist/app.js", "utf8");
+  const handler = source.slice(
+    source.indexOf("function handlePeriodAction(day)"),
+    source.indexOf("function renderPeriodControls()"),
+  );
+  for (const currentDay of ["2025-11-03", "2025-11-07"]) {
+    for (const selectedDay of ["2025-11-02", currentDay]) {
+      let saved: any;
+      let selectedAfter: string | undefined;
+      const context = {
+        state: beginPeriod(empty(), "2025-11-01", "2025-11-01"),
+        todayKey: currentDay,
+        periodContaining, ongoingPeriod, finishPeriod, beginPeriod,
+        editPeriodDialog: () => assert.fail("Expected ongoing period action"),
+        savePeriodChange: (change: (state: any) => any, selected: string) => {
+          saved = change(context.state);
+          selectedAfter = selected;
+        },
+      };
+      runInNewContext(handler + `\nhandlePeriodAction("${selectedDay}");`, context);
+      assert.equal(saved.ends["2025-11-01"], selectedDay);
+      assert.equal(selectedAfter, selectedDay);
+      const reloaded = resolvePeriods(JSON.parse(JSON.stringify(saved)), "2025-11-10");
+      assert.equal(reloaded.ends["2025-11-01"], selectedDay);
+      assert.equal(reloaded.periodEstimates["2025-11-01"], undefined);
+      assert.equal(stateSchema.safeParse(reloaded).success, true);
+    }
+  }
+});
 const empty = () => ({
   name: "Em",
   length: 28,
