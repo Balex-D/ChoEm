@@ -2,7 +2,7 @@ import { analyzeCycles, recordLocalForecast } from "./js/cycle-analysis.js";
 import { renderCycleOverview, renderCycleNotices, renderCycleCharts } from "./js/cycle-analysis-view.js";
 import { cycleDayType } from "./js/cycle-model.js";
 import { attachPeriodDrag } from "./js/period-drag.js";
-import { periodContaining, ongoingPeriod, recordPeriodRange, recordPeriodDragRange, beginPeriod, finishPeriod, removePeriod, periodDayCount } from "./js/period-records.js";
+import { resolvePeriods, periodContaining, ongoingPeriod, recordPeriodRange, recordPeriodDragRange, beginPeriod, finishPeriod, removePeriod, periodDayCount } from "./js/period-records.js";
 import { Cloud } from "./js/cloud.js";
 import { accountDialog } from "./js/account.js";
 import { renderConnections } from "./js/connections.js";
@@ -36,7 +36,8 @@ const moods = [
   ["XauHo", "Nhạy cảm"],
 ];
 const symptoms = ["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"];
-const today = new Date();
+const vietnamDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const today = new Date(vietnamDay() + "T12:00:00");
 today.setHours(12, 0, 0, 0);
 const key = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -330,6 +331,7 @@ function bindCalendar({ keepDrag = false } = {}) {
   }
 }
 function render() {
+  state = resolvePeriods(state, todayKey);
   periodDragCleanup?.(); periodDragCleanup = null;
   if (cloud?.user?.role === "anh") view = "connect";
   renderNav();
@@ -340,7 +342,7 @@ function render() {
 }
 function refreshCalendarDate() {
   if (!state || $("#dialog").open || $("#main").classList.contains("period-dragging") || hasUnsavedDraft()) return;
-  const current = new Date(); current.setHours(12,0,0,0);
+  const current = new Date(vietnamDay() + "T12:00:00");
   const nextKey = key(current);
   if (nextKey === todayKey) return;
   const followingToday = selected === todayKey;
@@ -506,7 +508,6 @@ function handlePeriodAction(day) {
   if (existing && !existing.ongoing) return editPeriodDialog(existing.start);
   const active = ongoingPeriod(state,todayKey);
   if (active && day >= active.start) return savePeriodChange(current => finishPeriod(current,active.start,todayKey,todayKey), todayKey);
-  if (state.starts.some(start => start > day)) return editPeriodDialog(null,day,day);
   return savePeriodChange(current => beginPeriod(current,day,todayKey), day);
 }
 function renderPeriodControls() {
@@ -515,10 +516,12 @@ function renderPeriodControls() {
   const ending = active && selected >= active.start;
   const recorded = existing && !existing.ongoing;
   const completed = recorded && Boolean(state.ends[existing.start]);
+  const estimated = completed && Boolean(state.periodEstimates?.[existing.start]);
   const future = selected > todayKey;
   const panel = document.createElement("div");
   panel.className = "period-action-panel";
   panel.innerHTML = `<button class="primary" id="selected-period-action" ${future ? "disabled" : ""}>${recorded ? "Chỉnh sửa kỳ kinh" : ending ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button><p>${future ? "Ngày tương lai chỉ hiển thị dự kiến. Em có thể ghi nhận khi ngày đó đến." : completed ? `Đã hoàn tất · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start,existing.end)} ngày hành kinh` : recorded ? `Đã ghi ngày bắt đầu ${existing.start}. Em bổ sung ngày kết thúc để tính thời gian hành kinh thực tế nhé.` : ending ? `Đang ghi nhận từ ${active.start} · ${periodDayCount(active.start,todayKey)} ngày. Nhấn kết thúc để lấy hôm nay làm ngày cuối cùng.` : "Ghi nhận ngày đang chọn là ngày bắt đầu kỳ kinh."}</p>${existing ? '<button class="text-button" id="adjust-period-range">Sửa khoảng ngày</button> <button class="text-button" id="remove-selected-period">Xóa khoảng đã ghi</button>' : ""}`;
+  if (estimated) panel.querySelector("p").textContent = `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
   $(".day-details > b").after(panel);
   panel.querySelector("#selected-period-action").onclick = async event => { event.target.disabled = true; await handlePeriodAction(selected); if(event.target.isConnected) event.target.disabled = future; };
   if (existing) {
@@ -541,7 +544,7 @@ function confirmRemovePeriod(start) {
 }
 function editPeriodDialog(editStart, proposedStart, proposedEnd) {
   const start = editStart || proposedStart;
-  const end = editStart ? state.ends[editStart] || "" : proposedEnd || "";
+  const end = editStart ? (state.ends[editStart] > todayKey ? "" : state.ends[editStart] || "") : proposedEnd || "";
   openDialog(`<h2>${editStart ? "Chỉnh sửa kỳ kinh" : "Ghi nhận kỳ kinh"}</h2><form id="edit-period-form"><label class="form-label" for="actual-period-start">Ngày bắt đầu</label><input type="date" id="actual-period-start" required max="${todayKey}" value="${start}"><label class="form-label" for="actual-period-end">Ngày kết thúc</label><input type="date" id="actual-period-end" min="${start}" max="${todayKey}" value="${end}"><p>Ngày đầu và ngày cuối đều được tính. Để trống ngày kết thúc nếu kỳ kinh vẫn tiếp tục. Các khoảng trùng hoặc liền nhau sẽ được gộp.</p><button class="primary">Lưu thay đổi</button></form>`);
   $("#actual-period-start").oninput = event => { $("#actual-period-end").min = event.target.value; };
   $("#edit-period-form").onsubmit = async event => {

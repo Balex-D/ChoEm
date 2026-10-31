@@ -39,6 +39,7 @@ export function analyzeCycles(state, today) {
     }))
     .filter(
       (item) =>
+        !state.periodEstimates?.[item.start] &&
         validDay(item.end) &&
         item.end >= item.start &&
         item.end <= today &&
@@ -50,8 +51,8 @@ export function analyzeCycles(state, today) {
       value: daysBetween(start, end) + 1,
     }))
     .slice(-6);
-  const averageCycleLength = mean(cycles.map((item) => item.value));
-  const averagePeriodLength = mean(completed.map((item) => item.value));
+  const averageCycleLength = mean(cycles.map((item) => item.value)) ?? 28;
+  const averagePeriodLength = mean(completed.map((item) => item.value)) ?? 5;
   const lastPeriodStart = starts.at(-1) || null;
   const nextPeriodStart =
     lastPeriodStart &&

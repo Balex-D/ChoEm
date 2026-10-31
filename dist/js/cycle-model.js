@@ -1,11 +1,24 @@
 import { analyzeCycles, shiftDay } from "./cycle-analysis.js";
-import { periodIntervals } from "./period-records.js";
+import {
+  periodIntervals,
+  resolvePeriods,
+  addPeriodDays,
+} from "./period-records.js";
 export function cycleDayType(
   state,
   key,
   today,
   analysis = analyzeCycles(state, today),
 ) {
+  state = resolvePeriods(state, today);
+  for (const [start, duration] of Object.entries(state.periodEstimates || {})) {
+    if (
+      key > today &&
+      key >= start &&
+      key <= addPeriodDays(start, duration - 1)
+    )
+      return "predicted";
+  }
   if (
     key <= today &&
     periodIntervals(state, today).some(

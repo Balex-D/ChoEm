@@ -16,7 +16,9 @@ Bổ sung backend vào đúng bản `Cho-Em-main.zip` đã chỉnh sửa. Giữ 
 - Backend TypeScript chia module; SQL migration có kiểm tra checksum; Dockerfile, Compose local và production HTTPS.
 - 11 kiểm thử API/đồng bộ đã chạy qua; chi tiết và giới hạn tại [docs/TESTING.md](docs/TESTING.md).
 
-**Chưa có:** email xác minh/khôi phục tự phục vụ, Web Push/nhắc lịch khi app đóng, thuật toán học chu kỳ từ lịch sử. Có CLI đổi mật khẩu cho quản trị viên. Bản này chưa được deploy lên máy chủ thật hoặc kiểm toán bảo mật.
+Ứng dụng hiện tính độ dài chu kỳ và số ngày hành kinh trung bình từ tối đa 6 mẫu gần nhất, làm tròn đến ngày nguyên, để ước tính kỳ tiếp theo.
+
+**Chưa có:** email xác minh/khôi phục tự phục vụ, Web Push/nhắc lịch khi app đóng. Có CLI đổi mật khẩu cho quản trị viên. Bản này chưa được deploy lên máy chủ thật hoặc kiểm toán bảo mật.
 
 ## 2. Chạy nhanh trên máy với Docker
 
@@ -86,6 +88,44 @@ Build chỉ biên dịch backend sang `server/build`; frontend trong `dist` đã
 7. Có thể ngắt kết nối từ một trong hai phía.
 
 Ở localhost, hai tài khoản có thể thử bằng trình duyệt thường và cửa sổ riêng tư. Để QR mở trên điện thoại khác, cần deploy lên domain HTTPS truy cập được từ thiết bị đó; QR chứa localhost sẽ chỉ trỏ đến chính thiết bị quét.
+
+### Ghi nhận kỳ kinh bằng nút bấm
+
+Chức năng áp dụng cho cả dữ liệu trên thiết bị và dữ liệu đồng bộ theo tài khoản. Sau khi cập nhật mã nguồn, chạy `npm run db:migrate` để bổ sung trường lưu thời lượng ước tính trước khi khởi động backend.
+
+Người dùng chọn ngày bắt đầu và bấm **Ghi nhận kỳ kinh**. Ứng dụng sử dụng **số ngày hành kinh trung bình của chính người dùng**, không dùng độ dài chu kỳ, để xác định ngày kết thúc dự kiến:
+
+```text
+Ngày kết thúc dự kiến = Ngày bắt đầu + Số ngày hành kinh trung bình − 1
+```
+
+Số ngày hành kinh được tính bao gồm cả ngày bắt đầu và ngày kết thúc. Ngày hiện tại được xác định theo múi giờ Việt Nam.
+
+**Dữ liệu ban đầu:** khi chưa có lịch sử đủ để tính trung bình, sử dụng **5 ngày hành kinh** và **chu kỳ 28 ngày**. Khi có dữ liệu thực tế hợp lệ, thay các giá trị mặc định bằng trung bình từ lịch sử của người dùng. Các giá trị mặc định không được tạo thành bản ghi kỳ kinh thực tế.
+
+**Kỳ kinh còn đang diễn ra:**
+
+- Nếu ngày kết thúc dự kiến nằm trong tương lai, tô hồng các ngày từ ngày bắt đầu đến hôm nay. Các ngày từ ngày mai đến ngày kết thúc dự kiến hiển thị theo kiểu **ngày kinh dự kiến**.
+- Ngày dự kiến chưa diễn ra không được ghi nhận thành ngày hành kinh thực tế.
+- Nếu kỳ kinh kéo dài hơn số ngày trung bình, tiếp tục tô hồng các ngày đã diễn ra khi kỳ kinh còn mở. Trong khoảng sau thời lượng trung bình đến hết ngày thứ 7 của kỳ kinh, nút ghi nhận chuyển thành **Kết thúc kỳ kinh** để người dùng xác nhận ngày kết thúc thực tế.
+- Ngày thứ 7 được tính từ ngày bắt đầu, với ngày bắt đầu là ngày thứ 1. Sau khi hết ngày thứ 7 (từ ngày thứ 8), nếu người dùng vẫn chưa ghi nhận ngày kết thúc, tự đặt số ngày hành kinh của kỳ này bằng số ngày hành kinh trung bình đã dùng khi ghi nhận bắt đầu; nếu chưa có trung bình thì dùng 5 ngày.
+- Khi tự kết thúc, ngày kết thúc bằng ngày bắt đầu cộng số ngày hành kinh trung bình trừ 1. Cập nhật lại phần tô hồng theo khoảng này, bỏ tô hồng các ngày ngoài khoảng đã tự đặt. Người dùng có thể sửa lại ngày kết thúc theo thực tế.
+
+**Ghi nhận kỳ kinh trong quá khứ:**
+
+- Nếu ngày kết thúc tính theo trung bình nằm trước hôm nay, tự đặt ngày kết thúc bằng ngày bắt đầu cộng số ngày hành kinh trung bình trừ 1.
+- Tô hồng toàn bộ khoảng ngày đó. Độ dài kỳ hành kinh được đặt bằng số ngày hành kinh trung bình của người dùng; người dùng có thể sửa lại theo thực tế.
+
+Ví dụ với số ngày hành kinh trung bình là **5 ngày**:
+
+| Thao tác | Kết quả mong muốn |
+| --- | --- |
+| Hôm nay 03/10, ghi nhận bắt đầu 01/10 | Tô hồng 01–03/10; hiển thị 04–05/10 là ngày kinh dự kiến. |
+| Đến 06/10 vẫn đang hành kinh | Tô hồng đến 06/10; nút hiển thị **Kết thúc kỳ kinh** trong ngày thứ 6 và thứ 7. |
+| Hôm nay 10/10, ghi nhận bắt đầu 01/10 | Đặt kỳ hành kinh từ 01–05/10 và tô hồng toàn bộ khoảng này. |
+| Đến 08/10, kỳ bắt đầu 01/10 vẫn chưa được ghi nhận kết thúc | Tự đặt ngày kết thúc là 05/10 theo trung bình 5 ngày; chỉ tô hồng 01–05/10. |
+
+Nếu ngày kết thúc dự kiến đúng hôm nay, kỳ kinh vẫn mở để người dùng xác nhận kết thúc. Quy tắc tự kết thúc từ ngày thứ 8 vẫn áp dụng khi số ngày hành kinh trung bình từ 7 ngày trở lên; ngày kết thúc được điền theo trung bình, không mặc định cắt về 7 ngày. Thời lượng trung bình được giữ tại lúc ghi nhận bắt đầu. Ngày kết thúc được điền theo trung bình được phân biệt với ngày do người dùng xác nhận và không tham gia tính trung bình hành kinh cho đến khi được xác nhận. Việc tự kết thúc được áp dụng khi mở lại ứng dụng, đổi ngày hoặc đọc dữ liệu trên máy chủ, không cần ứng dụng chạy nền.
 
 ## 5. Đọc code ở đâu?
 

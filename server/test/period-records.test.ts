@@ -9,6 +9,7 @@ import {
   removePeriod,
   periodDayCount,
   ongoingPeriod,
+  resolvePeriods,
 } from "../../dist/js/period-records.js";
 // @ts-ignore Calendar shares the exact model used by the UI.
 import { cycleDayType, calendarMonth } from "../../dist/js/cycle-model.js";
@@ -32,15 +33,32 @@ test("dragging back to the first day deletes only the edited period and preserve
     recordPeriodRange(prior, "2025-10-01", "2025-10-09", today),
     beginPeriod(prior, "2025-10-01", today),
   ]) {
-    const removed = recordPeriodDragRange(state, "2025-10-01", "2025-10-01", today, "2025-10-01");
-    assert.deepEqual(removed, prior);
+    const removed = recordPeriodDragRange(
+      state,
+      "2025-10-01",
+      "2025-10-01",
+      today,
+      "2025-10-01",
+    );
+    assert.deepEqual(
+      { ...removed, periodEstimates: {} },
+      { ...prior, periodEstimates: {} },
+    );
     assert.ok(state.starts.includes("2025-10-01"));
   }
-  const single = recordPeriodDragRange(empty(), "2025-10-01", "2025-10-01", today);
+  const single = recordPeriodDragRange(
+    empty(),
+    "2025-10-01",
+    "2025-10-01",
+    today,
+  );
   assert.equal(single.ends["2025-10-01"], "2025-10-01");
   const shortened = recordPeriodDragRange(
     recordPeriodRange(empty(), "2025-10-01", "2025-10-09", today),
-    "2025-10-01", "2025-10-02", today, "2025-10-01",
+    "2025-10-01",
+    "2025-10-02",
+    today,
+    "2025-10-01",
   );
   assert.equal(shortened.ends["2025-10-01"], "2025-10-02");
 });
@@ -84,11 +102,12 @@ test("dragging an existing range back shrinks the end; deletion preserves journa
   assert.deepEqual(removed.ends, {});
   assert.equal(removed.entries["2025-10-01"].note, "keep me");
 });
-test("start persists an ongoing state past configured duration; finish uses inclusive actual dates", () => {
+test("historical button recording uses estimated duration; confirmation uses actual dates", () => {
   const state = beginPeriod(empty(), "2025-11-01", today);
   const reloaded = JSON.parse(JSON.stringify(state));
-  assert.equal(ongoingPeriod(reloaded, today)?.start, "2025-11-01");
-  assert.equal(cycleDayType(reloaded, "2025-11-14", today), "period");
+  assert.equal(ongoingPeriod(reloaded, today), null);
+  assert.equal(reloaded.ends["2025-11-01"], "2025-11-05");
+  assert.equal(cycleDayType(reloaded, "2025-11-14", today), "");
   const completed = finishPeriod(reloaded, "2025-11-01", today, today);
   assert.equal(ongoingPeriod(completed, today), null);
   assert.equal(periodDayCount("2025-11-01", completed.ends["2025-11-01"]), 15);
@@ -111,4 +130,45 @@ test("future and invalid dates cannot be recorded; finishing cannot overlap anot
   assert.throws(() => beginPeriod(state, "2025-10-03", today));
   const later = beginPeriod(state, "2025-11-01", today);
   assert.throws(() => finishPeriod(later, "2025-10-01", "2025-11-02", today));
+});
+
+test("button recording separates future estimates, extends through day seven and auto-closes on day eight", () => {
+  const state = beginPeriod(empty(), "2025-11-01", "2025-11-03");
+  assert.equal(cycleDayType(state, "2025-11-03", "2025-11-03"), "period");
+  assert.equal(cycleDayType(state, "2025-11-04", "2025-11-03"), "predicted");
+  assert.equal(cycleDayType(state, "2025-11-06", "2025-11-06"), "period");
+  assert.equal(ongoingPeriod(state, "2025-11-07")?.start, "2025-11-01");
+  const closed = resolvePeriods(
+    JSON.parse(JSON.stringify(state)),
+    "2025-11-08",
+  );
+  assert.equal(closed.ends["2025-11-01"], "2025-11-05");
+  assert.equal(ongoingPeriod(closed, "2025-11-08"), null);
+  assert.equal(cycleDayType(closed, "2025-11-06", "2025-11-08"), "");
+  assert.equal(stateSchema.safeParse(closed).success, true);
+});
+
+test("personal average is frozen at recording and inferred ends never enter actual statistics", async () => {
+  const { analyzeCycles } = await import("../../dist/js/cycle-analysis.js");
+  const history = recordPeriodRange(empty(), "2025-10-01", "2025-10-06", today);
+  const state = beginPeriod(history, "2025-11-01", "2025-11-03");
+  assert.equal(state.periodEstimates["2025-11-01"], 6);
+  const closed = resolvePeriods(state, "2025-11-08");
+  assert.equal(closed.ends["2025-11-01"], "2025-11-06");
+  assert.equal(analyzeCycles(closed, today).completed.length, 1);
+  const confirmed = finishPeriod(closed, "2025-11-01", "2025-11-07", today);
+  assert.equal(analyzeCycles(confirmed, today).completed.length, 2);
+  assert.equal(confirmed.periodEstimates["2025-11-01"], undefined);
+});
+
+test("expected end today remains open and can be confirmed", () => {
+  const state = beginPeriod(empty(), "2025-11-01", "2025-11-05");
+  assert.equal(ongoingPeriod(state, "2025-11-05")?.start, "2025-11-01");
+  const confirmed = finishPeriod(
+    state,
+    "2025-11-01",
+    "2025-11-05",
+    "2025-11-05",
+  );
+  assert.equal(ongoingPeriod(confirmed, "2025-11-05"), null);
 });

@@ -22,9 +22,9 @@ export function renderCycleNotices(a) {
   const messages = [a.cycleNotice, a.periodNotice, a.timingNotice].filter(
     Boolean,
   );
-  if (a.averageCycleLength === null || a.averagePeriodLength === null)
+  if (a.cycles?.length === 0 || a.completed?.length === 0)
     messages.unshift(
-      "Chưa đủ dữ liệu để dự kiến kỳ kinh tiếp theo. Mỗi lần ghi nhận sẽ giúp Em hiểu nhịp điệu của mình hơn một chút.",
+      "Khi chưa đủ lịch sử thực tế, ứng dụng dùng chu kỳ 28 ngày và thời gian hành kinh 5 ngày làm mặc định cho chỉ số còn thiếu.",
     );
   return messages.length
     ? `<div class="cycle-analysis-notices">${messages.map((message) => `<p>${message}</p>`).join("")}</div>`

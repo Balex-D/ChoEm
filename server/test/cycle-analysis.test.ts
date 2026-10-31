@@ -25,13 +25,13 @@ function history(intervals: number[], durations: number[]) {
     ),
   };
 }
-test("zero/one recorded period never fabricate cycle or forecast from legacy settings", () => {
+test("defaults are 28 and 5 without fabricated observations", () => {
   const empty = analyzeCycles(
     { starts: [], ends: {}, length: 28, duration: 5 },
     today,
   );
-  assert.equal(empty.averageCycleLength, null);
-  assert.equal(empty.averagePeriodLength, null);
+  assert.equal(empty.averageCycleLength, 28);
+  assert.equal(empty.averagePeriodLength, 5);
   assert.equal(empty.nextPeriodStart, null);
   const one = analyzeCycles(
     {
@@ -43,8 +43,8 @@ test("zero/one recorded period never fabricate cycle or forecast from legacy set
     today,
   );
   assert.equal(one.averagePeriodLength, 5);
-  assert.equal(one.averageCycleLength, null);
-  assert.equal(one.nextPeriodStart, null);
+  assert.equal(one.averageCycleLength, 28);
+  assert.equal(one.nextPeriodStart, "2024-01-29");
   assert.ok(renderCycleOverview(empty).includes("--"));
   assert.ok(renderCycleCharts(empty).includes("Chưa đủ dữ liệu"));
 });
@@ -69,7 +69,10 @@ test("ongoing periods are excluded from period-duration statistics", () => {
   assert.equal(a.averageCycleLength, 28);
   assert.equal(a.cycleNotice, null);
   assert.equal(a.periodNotice, null);
-  assert.equal(analyzeCycles(history([28], []), today).nextPeriodStart, null);
+  assert.equal(
+    analyzeCycles(history([28], []), today).nextPeriodStart,
+    "2024-02-26",
+  );
 });
 test("stability uses requested spread thresholds and requires three observations", () => {
   assert.match(

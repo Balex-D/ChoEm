@@ -83,6 +83,33 @@ function sample() {
     privacy: { cycle: false, mood: false, notes: false },
   };
 }
+
+test("estimated period duration survives sync and closes without becoming confirmed evidence", async () => {
+  const { agent } = await user("period-estimates@example.test");
+  const fresh = await agent.get("/api/state");
+  const state = {
+    ...fresh.body.state,
+    starts: ["2025-01-01"],
+    ends: {},
+    periodEstimates: { "2025-01-01": 6 },
+  };
+  const saved = await mutate(agent, "put", "/api/state", {
+    revision: fresh.body.revision,
+    state,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  const loaded = await agent.get("/api/state");
+  assert.equal(loaded.body.state.ends["2025-01-01"], "2025-01-06");
+  assert.equal(loaded.body.state.periodEstimates["2025-01-01"], 6);
+  assert.equal(
+    analyzeCycles(loaded.body.state, "2025-02-01").completed.length,
+    0,
+  );
+  assert.equal(
+    analyzeCycles(loaded.body.state, "2025-02-01").averagePeriodLength,
+    5,
+  );
+});
 const today = () =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",

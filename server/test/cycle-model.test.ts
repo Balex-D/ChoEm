@@ -18,8 +18,8 @@ test("actual period end overrides configured duration and deleting an entry remo
     cycleDayType({ ...state, ends: {} }, "2026-10-09", "2026-10-09"),
     "period",
   );
-  assert.equal(cycleDayType(state, "2026-10-15", "2026-10-20"), "");
-  assert.equal(cycleDayType(state, "2026-10-29", "2026-10-20"), "");
+  assert.equal(cycleDayType(state, "2026-10-15", "2026-10-20"), "ovulation");
+  assert.equal(cycleDayType(state, "2026-10-29", "2026-10-20"), "predicted");
   assert.equal(
     calendarMonth(
       { ...state, starts: [], ends: {} },

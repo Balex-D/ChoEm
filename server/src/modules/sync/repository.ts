@@ -3,6 +3,15 @@ import type { AppState } from "./schema.js";
 import { HttpError } from "../../common/errors.js";
 // @ts-ignore Pure rule-based analysis shared with the PWA.
 import { analyzeCycles } from "../../../../dist/js/cycle-analysis.js";
+// @ts-ignore Shared period lifecycle.
+import { resolvePeriods } from "../../../../dist/js/period-records.js";
+const vietnamToday = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 export async function readState(q: Queryable, userId: string) {
   const {
     rows: [p],
@@ -18,6 +27,7 @@ export async function readState(q: Queryable, userId: string) {
   );
   const state: AppState = {
     name: p.name,
+    periodEstimates: p.period_estimates || {},
     symptomSuggestions: p.symptom_suggestions,
     starts: cycles.map((r) => r.start),
     ends: Object.fromEntries(
@@ -46,7 +56,10 @@ export async function readState(q: Queryable, userId: string) {
     end: row.end,
     issuedAt: new Date(row.issued_at).toISOString(),
   }));
-  return { state, revision: p.revision as number };
+  return {
+    state: resolvePeriods(state, vietnamToday()) as AppState,
+    revision: p.revision as number,
+  };
 }
 export async function getState(db: Database, userId: string) {
   return db.transaction(async (q) => {
@@ -85,6 +98,7 @@ export async function saveState(
   state: AppState,
   revision: number,
 ) {
+  state = resolvePeriods(state, vietnamToday());
   return db.transaction(async (q) => {
     const {
       rows: [profile],
@@ -110,6 +124,10 @@ export async function saveState(
         state.privacy.mood,
         state.privacy.notes,
       ],
+    );
+    await q.query(
+      "UPDATE profiles SET period_estimates=$2::jsonb WHERE user_id=$1",
+      [userId, JSON.stringify(state.periodEstimates || {})],
     );
     await q.query("DELETE FROM cycles WHERE user_id=$1", [userId]);
     await q.query("UPDATE profiles SET share_symptoms=$2 WHERE user_id=$1", [

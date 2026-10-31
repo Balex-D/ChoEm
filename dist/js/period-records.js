@@ -1,3 +1,4 @@
+import { analyzeCycles } from "./cycle-analysis.js";
 const stamp = (day) => Date.parse(day + "T12:00:00Z");
 export const addPeriodDays = (day, amount) =>
   new Date(stamp(day) + amount * 86400000).toISOString().slice(0, 10);
@@ -13,7 +14,23 @@ function validate(day, today) {
   )
     throw new Error("Chỉ ghi nhận ngày đã diễn ra, từ năm 1900 đến hôm nay.");
 }
+// Estimates remain separate from confirmed ends, including after automatic closure.
+export function resolvePeriods(state, today) {
+  const ends = { ...state.ends };
+  for (const [start, duration] of Object.entries(state.periodEstimates || {})) {
+    if (!state.starts.includes(start)) continue;
+    const expected = addPeriodDays(start, duration - 1);
+    if (periodDayCount(start, today) > 7 || expected < today) {
+      // A current recording stays open through day seven; historical recordings
+      // already have their estimated end set by beginPeriod.
+      if (periodDayCount(start, today) > 7 || ends[start])
+        ends[start] = expected;
+    }
+  }
+  return { ...state, ends };
+}
 export function periodIntervals(state, today) {
+  state = resolvePeriods(state, today);
   const starts = [...state.starts].sort();
   return starts.map((start, i) => ({
     start,
@@ -31,7 +48,13 @@ export function periodContaining(state, day, today) {
     ) || null
   );
 }
-export function recordPeriodDragRange(state, from, to, today, editStart = null) {
+export function recordPeriodDragRange(
+  state,
+  from,
+  to,
+  today,
+  editStart = null,
+) {
   validate(from, today);
   validate(to, today);
   if (editStart && state.starts.includes(editStart) && to === editStart)
@@ -66,11 +89,20 @@ export function recordPeriodRange(state, from, to, today, editStart = null) {
   } while (changed);
   const starts = state.starts.filter((day) => !removed.has(day));
   const ends = { ...state.ends };
-  for (const day of removed) delete ends[day];
+  const periodEstimates = { ...state.periodEstimates };
+  for (const day of removed) {
+    delete ends[day];
+    delete periodEstimates[day];
+  }
   starts.push(start);
   starts.sort();
   if (!ongoing) ends[start] = end;
-  return { ...state, starts, ends };
+  return {
+    ...state,
+    starts,
+    ends,
+    ...(state.periodEstimates ? { periodEstimates } : {}),
+  };
 }
 export function beginPeriod(state, start, today) {
   validate(start, today);
@@ -82,13 +114,19 @@ export function beginPeriod(state, start, today) {
     throw new Error(
       "Hãy kết thúc kỳ kinh đang ghi nhận trước khi bắt đầu kỳ mới.",
     );
-  if (state.starts.some((day) => day > start))
-    throw new Error("Với kỳ kinh cũ, hãy chọn cả ngày bắt đầu và kết thúc.");
-  return {
+  const duration = analyzeCycles(state, today).averagePeriodLength;
+  const expected = addPeriodDays(start, duration - 1);
+  if (state.starts.some((day) => day > start && day <= expected))
+    throw new Error("Khoảng ngày dự kiến trùng kỳ kinh khác.");
+  const next = {
     ...state,
     starts: [...state.starts, start].sort(),
     ends: { ...state.ends },
+    periodEstimates: { ...state.periodEstimates, [start]: duration },
   };
+  if (expected < today || periodDayCount(start, today) > 7)
+    next.ends[start] = expected;
+  return next;
 }
 export function finishPeriod(state, start, end, today) {
   validate(end, today);
@@ -98,13 +136,21 @@ export function finishPeriod(state, start, end, today) {
     state.starts.some((day) => day > start && day <= end)
   )
     throw new Error("Ngày kết thúc không hợp lệ hoặc trùng kỳ kinh khác.");
-  return { ...state, ends: { ...state.ends, [start]: end } };
+  const next = { ...state, ends: { ...state.ends, [start]: end } };
+  if (state.periodEstimates) {
+    next.periodEstimates = { ...state.periodEstimates };
+    delete next.periodEstimates[start];
+  }
+  return next;
 }
 export function removePeriod(state, start) {
   const ends = { ...state.ends };
   delete ends[start];
+  const periodEstimates = { ...state.periodEstimates };
+  delete periodEstimates[start];
   return {
     ...state,
+    ...(state.periodEstimates ? { periodEstimates } : {}),
     starts: state.starts.filter((day) => day !== start),
     ends,
   };

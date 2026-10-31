@@ -15,6 +15,9 @@ export const stateSchema = z
       .default(["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"]),
     starts: z.array(dateSchema).max(1000),
     ends: z.record(dateSchema, dateSchema),
+    periodEstimates: z
+      .record(dateSchema, z.number().int().min(1).max(1000))
+      .default({}),
     entries: z.record(
       dateSchema,
       z.object({
@@ -59,9 +62,24 @@ export const stateSchema = z
     }).format(new Date());
     for (const start of state.starts)
       if (start > today) error("Ngày bắt đầu không thể ở tương lai");
+    for (const [start, duration] of Object.entries(state.periodEstimates)) {
+      if (!state.starts.includes(start))
+        error("Ước tính không có kỳ kinh tương ứng");
+      const expected = new Date(
+        Date.parse(start + "T12:00:00Z") + (duration - 1) * 86400000,
+      )
+        .toISOString()
+        .slice(0, 10);
+      if (state.ends[start] && state.ends[start] !== expected)
+        error("Ngày kết thúc ước tính không khớp thời lượng");
+    }
     const sorted = [...state.starts].sort();
     for (const [start, end] of Object.entries(state.ends)) {
-      if (!state.starts.includes(start) || end < start || end > today)
+      if (
+        !state.starts.includes(start) ||
+        end < start ||
+        (end > today && !state.periodEstimates[start])
+      )
         error("Ngày kết thúc không hợp lệ");
       const next = sorted[sorted.indexOf(start) + 1];
       if (next && end >= next) error("Các kỳ kinh không được chồng ngày");
