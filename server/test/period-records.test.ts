@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 // @ts-ignore Pure PWA period model.
 import {
   recordPeriodRange,
+  recordPeriodDragRange,
   beginPeriod,
   finishPeriod,
   removePeriod,
@@ -23,6 +24,25 @@ const empty = () => ({
     "2025-10-01": { note: "keep me", mood: "", symptoms: [], shared: false },
   },
   privacy: { cycle: false, mood: false, notes: false, symptoms: false },
+});
+
+test("dragging back to the first day deletes only the edited period and preserves journals", () => {
+  const prior = recordPeriodRange(empty(), "2025-09-01", "2025-09-05", today);
+  for (const state of [
+    recordPeriodRange(prior, "2025-10-01", "2025-10-09", today),
+    beginPeriod(prior, "2025-10-01", today),
+  ]) {
+    const removed = recordPeriodDragRange(state, "2025-10-01", "2025-10-01", today, "2025-10-01");
+    assert.deepEqual(removed, prior);
+    assert.ok(state.starts.includes("2025-10-01"));
+  }
+  const single = recordPeriodDragRange(empty(), "2025-10-01", "2025-10-01", today);
+  assert.equal(single.ends["2025-10-01"], "2025-10-01");
+  const shortened = recordPeriodDragRange(
+    recordPeriodRange(empty(), "2025-10-01", "2025-10-09", today),
+    "2025-10-01", "2025-10-02", today, "2025-10-01",
+  );
+  assert.equal(shortened.ends["2025-10-01"], "2025-10-02");
 });
 test("drag range includes both endpoints across months and supports reverse drag", () => {
   const forward = recordPeriodRange(empty(), "2025-09-28", "2025-10-03", today);

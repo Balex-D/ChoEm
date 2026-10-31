@@ -16,6 +16,9 @@ export function attachPeriodDrag({
     direction = 0,
     suppressUntil = 0;
   const paint = () => {
+    const removing = Boolean(
+      gesture?.active && gesture.moved && gesture.editStart && gesture.current === gesture.start,
+    );
     const range = gesture?.active
       ? [gesture.start, gesture.current].sort()
       : null;
@@ -23,7 +26,7 @@ export function attachPeriodDrag({
       const day = button.dataset.day;
       button.classList.toggle(
         "period-preview",
-        Boolean(range && day >= range[0] && day <= range[1]),
+        Boolean(range && !removing && day >= range[0] && day <= range[1]),
       );
       button.classList.toggle(
         "period-preview-removed",
@@ -32,7 +35,7 @@ export function attachPeriodDrag({
           gesture.editStart &&
           day >= gesture.start &&
           day <= gesture.oldEnd &&
-          (day < range[0] || day > range[1]),
+          (removing || day < range[0] || day > range[1]),
         ),
       );
     });
@@ -44,6 +47,7 @@ export function attachPeriodDrag({
       status.setAttribute("role", "status");
       status.textContent = `${range[0]} → ${range[1]} · Thả tay để lưu`;
       root.querySelector(".calendar-card")?.append(status);
+      if (removing) status.textContent = "Thả tay để xóa kỳ kinh";
     }
   };
   const stopEdge = () => {

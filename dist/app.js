@@ -2,7 +2,7 @@ import { analyzeCycles, recordLocalForecast } from "./js/cycle-analysis.js";
 import { renderCycleOverview, renderCycleNotices, renderCycleCharts } from "./js/cycle-analysis-view.js";
 import { cycleDayType } from "./js/cycle-model.js";
 import { attachPeriodDrag } from "./js/period-drag.js";
-import { periodContaining, ongoingPeriod, recordPeriodRange, beginPeriod, finishPeriod, removePeriod, periodDayCount } from "./js/period-records.js";
+import { periodContaining, ongoingPeriod, recordPeriodRange, recordPeriodDragRange, beginPeriod, finishPeriod, removePeriod, periodDayCount } from "./js/period-records.js";
 import { Cloud } from "./js/cloud.js";
 import { accountDialog } from "./js/account.js";
 import { renderConnections } from "./js/connections.js";
@@ -313,7 +313,7 @@ function bindCalendar({ keepDrag = false } = {}) {
     periodDragCleanup = attachPeriodDrag({
       root: $("#main"), today: todayKey, canStart: () => !periodSaving && cloud?.user?.role !== "anh",
       anchorForDay: day => { const period = periodContaining(state, day, todayKey); return { start:period?.start || day, editStart:period?.start || null, end:period?.end || null }; },
-      onCommit: (from,to,editStart) => savePeriodChange(current => recordPeriodRange(current,from,to,todayKey,editStart), to),
+      onCommit: (from,to,editStart) => savePeriodChange(current => recordPeriodDragRange(current,from,to,todayKey,editStart), to),
       onError: error => toast(error.message),
       onMonth: direction => {
         const next = new Date(month.getFullYear(),month.getMonth()+direction,1,12);

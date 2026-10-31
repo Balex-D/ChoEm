@@ -12,7 +12,7 @@
     "start": "node --env-file=.env server/build/index.js",
     "start:container": "node server/build/index.js",
     "db:migrate": "node --env-file=.env --import tsx server/src/db/migrate.ts",
-    "test": "node --import tsx --test server/test/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 server/test/*.test.ts",
     "check": "tsc -p server/tsconfig.json --noEmit",
     "password:reset": "node --env-file=.env --import tsx server/src/modules/auth/reset-password.ts",
     "format": "prettier --write \"dist/**/*.js\" \"server/**/*.ts\" \"server/**/*.json\""

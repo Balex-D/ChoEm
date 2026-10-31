@@ -2,7 +2,7 @@
 
 ## Đã chạy
 
-- `npm test`: **43/43 test qua** (bao gồm kéo khoảng ngày, bắt đầu/kết thúc, mặc định nhật ký, QR và vòng đời camera).
+- `npm test`: **44/44 test qua** (bao gồm kéo khoảng ngày, bắt đầu/kết thúc, mặc định nhật ký, QR và vòng đời camera).
 - `npm run check`: TypeScript kiểm tra kiểu qua.
 - `npm run build`: biên dịch backend thành công.
 - `node --check` cho app.js, các module frontend mới và Service Worker: qua.
@@ -68,3 +68,61 @@ Các tình huống:
 - Migration thử trên database đã có cấu hình cũ, kỳ kinh và nhật ký: bỏ hai cột cấu hình, giữ nguyên lịch sử, tên và quyền chia sẻ; request cũ có length/duration vẫn nhận nhưng bỏ qua. Client không thể giả mạo forecast đã lưu bằng JSON gửi lên.
 - Kiểm thử Chrome headless desktop và bố cục 430×932: rỗng hiển thị bốn chỉ số --; modal chỉ giữ tên; dữ liệu thực tế cho trung bình 28/5 và dự kiến đúng 24/04–28/04; hai biểu đồ có đúng số quan sát, loại kỳ chưa kết thúc; một kỳ hoàn tất chỉ tính được ngày hành kinh, không sinh chu kỳ hoặc dự báo. Không tràn ngang trên bố cục điện thoại.
 - Đối chiếu SHA-256 của toàn bộ hàng cycles/journal_entries trước và sau migration trên localhost trùng khớp. Tài khoản Chrome thử nghiệm đã được dọn, không thay lịch sử hay tài khoản có sẵn.
+
+---
+
+# Chạy và chẩn đoán test
+
+Chạy toàn bộ test bằng `npm test`. Lệnh này dùng Node test runner và `tsx`,
+chạy từng file một (`--test-concurrency=1`) để tránh khởi tạo đồng thời các
+database PGlite/WASM trong các file kiểm thử tích hợp. Mỗi file vẫn chạy trong
+tiến trình riêng; tất cả test và kiểm tra đều được giữ nguyên. Không cần chạy
+Docker hoặc kết nối database production để chạy test.
+
+## Lỗi `uv_os_get_passwd returned ENOMEM` trên Windows
+
+Trước khi kết luận thiếu RAM, thử trong cùng môi trường chạy test:
+
+```powershell
+node -e "console.log(require('node:os').userInfo())"
+node -e "const os=require('node:os'); console.log({totalGiB:os.totalmem()/2**30,freeGiB:os.freemem()/2**30})"
+```
+
+`tsx` gọi `os.userInfo()` khi khởi tạo đường dẫn IPC trên Windows. Nếu lệnh
+đầu tiên cũng lỗi trước khi tải ứng dụng, đây là lỗi khởi tạo môi trường,
+không phải test assertion thất bại. So sánh cùng lệnh trong terminal người dùng
+thông thường với terminal bị giới hạn quyền/sandbox. Nếu chỉ sandbox lỗi,
+chạy `npm test` trong terminal thông thường hoặc cấp quyền chạy test ngoài
+sandbox theo chính sách của công cụ. Không cần chạy terminal bằng Administrator.
+
+Không sửa `node_modules`, giả lập `os.userInfo()`, bỏ test hoặc tăng heap để
+che lỗi này. Giới hạn worker giúp giảm RAM nhưng không sửa lỗi tra cứu tài
+khoản do sandbox.
+
+## Kết quả chẩn đoán ngày 2026-10-31
+
+- Node v24.16.0, Windows, 16 CPU logic; RAM 15,63 GiB, còn khoảng 2,3 GiB.
+- `os.userInfo()` lỗi ENOMEM trong sandbox và thành công ngoài sandbox.
+  Điều này khoanh vùng lỗi theo ngữ cảnh quyền hạn; chưa xác định được lời gọi
+  Windows nội bộ nào thất bại. Không có bằng chứng lỗi do cạn heap Node.
+- Không có tiến trình Node chạy sẵn tại thời điểm kiểm tra. Chạy cấu hình cũ
+  tạo tối đa 10 tiến trình Node (runner và 9 file test), tổng working set đo
+  được cao nhất khoảng 1.605 MiB, lấy mẫu mỗi 150 ms.
+- Docker có 2 container app/database dùng tổng khoảng 67 MiB. Docker engine
+  báo RAM 7,57 GiB; Compose không cấu hình giới hạn RAM/CPU riêng. Dockerfile
+  build backend và loại dev dependencies, không chạy test. Không thay đổi
+  cấu hình Docker để xử lý lỗi sandbox của test chạy trực tiếp trên Windows.
+- Cấu hình cũ chạy ngoài sandbox hoàn tất: 44 pass, 0 fail, 0 skipped,
+  0 cancelled, khoảng 17 giây. Vì vậy chưa có bằng chứng chạy song song
+  gây ENOMEM; cấu hình tuần tự là biện pháp giảm bộ nhớ dự phòng.
+- Sau thay đổi, `npm test` chạy ngoài sandbox hoàn tất với exit code 0:
+  44 pass, 0 fail, 0 skipped, 0 cancelled; runner mất 22,68 giây
+  (toàn lệnh khoảng 24,41 giây). Tổng working set Node lấy mẫu đạt tối đa
+  1.090,7 MiB, giảm khoảng 32% so với lần chạy cũ. Có tối đa 5 tiến trình
+  Node quan sát được trong lần chạy qua npm; số này bao gồm tiến trình hỗ trợ,
+  không đồng nghĩa với 5 worker test. Chỉ một file test được chạy tại một thời điểm.
+- `npm run check` (TypeScript) cũng hoàn tất với exit code 0.
+
+Số liệu working set là mẫu đo tổng các tiến trình Node, không phải phép đo
+chính xác đỉnh bộ nhớ hoặc tổng commit của hệ thống. Khi báo cáo kết quả, luôn
+kiểm tra mã thoát và tổng pass/fail/skipped/cancelled sau khi runner kết thúc.

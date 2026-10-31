@@ -31,6 +31,13 @@ export function periodContaining(state, day, today) {
     ) || null
   );
 }
+export function recordPeriodDragRange(state, from, to, today, editStart = null) {
+  validate(from, today);
+  validate(to, today);
+  if (editStart && state.starts.includes(editStart) && to === editStart)
+    return removePeriod(state, editStart);
+  return recordPeriodRange(state, from, to, today, editStart);
+}
 export function recordPeriodRange(state, from, to, today, editStart = null) {
   validate(from, today);
   validate(to, today);
