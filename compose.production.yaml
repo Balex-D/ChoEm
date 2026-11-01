@@ -26,6 +26,8 @@ services:
       APP_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN to a real domain}
       TRUST_PROXY_HOPS: 1
       DATABASE_URL: postgresql://choem:${POSTGRES_PASSWORD}@db:5432/choem
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

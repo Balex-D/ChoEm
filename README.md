@@ -17,7 +17,7 @@ Bổ sung backend vào đúng bản `Cho-Em-main.zip` đã chỉnh sửa. Giữ 
 
 Ứng dụng hiện tính độ dài chu kỳ và số ngày hành kinh trung bình từ tối đa 6 mẫu gần nhất, làm tròn đến ngày nguyên, để ước tính kỳ tiếp theo.
 
-**Chưa có:** email xác minh/khôi phục tự phục vụ, Web Push/nhắc lịch khi app đóng. Có CLI đổi mật khẩu cho quản trị viên. Bản này chưa được deploy lên máy chủ thật hoặc kiểm toán bảo mật.
+**Đã bổ sung:** xác minh email và khôi phục mật khẩu qua Resend, khôi phục bản sao JSON có xem trước, tự xóa tài khoản và tải file lịch nhắc riêng tư. Email cần cấu hình `RESEND_API_KEY` và `EMAIL_FROM`; chưa có Web Push. Có CLI đổi mật khẩu cho quản trị viên. Xem [hướng dẫn tính năng và kiểm thử](docs/UPDATES.md). Bản này chưa được deploy lên máy chủ thật hoặc kiểm toán bảo mật.
 
 ## 2. Chạy nhanh trên máy với Docker
 
@@ -69,6 +69,7 @@ Lệnh kiểm tra và chạy bản build:
 
 ```powershell
 npm run check
+npm test
 npm run build
 npm start
 ```

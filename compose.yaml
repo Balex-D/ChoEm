@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: choem
       POSTGRES_DB: choem
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env first}
+    ports:
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,6 +27,8 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
       TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
       DATABASE_URL: postgresql://choem:${POSTGRES_PASSWORD}@db:5432/choem
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
     ports:
       - "127.0.0.1:8080:8080"
 volumes:

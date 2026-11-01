@@ -55,15 +55,23 @@ Một Node service phục vụ cả frontend và API, cùng một origin, cộng
 
 Mật khẩu dùng scrypt với salt ngẫu nhiên và N=65536, r=8, p=1. Session/mã mời dùng token ngẫu nhiên, chỉ hash lưu database. PostgreSQL phân quyền truy cập qua server, không đưa DATABASE_URL ra frontend. Production dùng TLS bên ngoài qua Caddy và cookie Secure; cấu hình database TLS riêng nếu DB nằm trên mạng bên ngoài.
 
+## Cập nhật an toàn tài khoản và dữ liệu
+
+Client gửi `X-Cho-Em-Account` trên API dùng session. Server so sánh với UUID của cookie; thiếu hoặc lệch trả `409 ACCOUNT_CHANGED`. `/auth/me` dùng để khám phá phiên hiện tại. BroadcastChannel báo đổi phiên cho các tab cùng origin, dừng sửa/đồng bộ và giữ bản chưa đồng bộ theo tài khoản. Kiểm tra server vẫn bắt buộc khi không có BroadcastChannel.
+
+Lần tải state đầu thất bại được thử lại khi có mạng, quay lại tab hoặc theo chu kỳ. `saveState` giữ transaction/revision, xóa những hàng đã bỏ và batch upsert các hàng còn lại. Số truy vấn không tăng theo số nhật ký.
+
+`public/js/core/storage.js` quản lý IndexedDB; `shared/dates.js` xác định ngày Việt Nam; các module `calendar-page.js` và `journal-page.js` hiển thị lịch/nhật ký. Khôi phục JSON kiểm tra dữ liệu, xem trước, xác nhận và đặt nhật ký nhập vào riêng tư. File ICS không chứa nội dung nhật ký.
+
+Migration 007 thêm trạng thái xác minh email và token tài khoản. Token chỉ lưu SHA-256, hạn 30 phút, dùng một lần và xử lý trong transaction khóa user. Reset thu hồi mọi session. Chỉ địa chỉ đã xác minh mới được gửi email reset. Người dùng chủ động bấm gửi thư; test và khởi động server không tự gửi email.
+
 ## Những phần còn cần phát triển trước khi mở rộng sử dụng công khai
 
-- Xác minh email và quy trình quên mật khẩu tự phục vụ qua email (hiện có CLI khôi phục cho quản trị viên).
-- Web Push, nhắc lịch nền và thông báo khi ứng dụng đóng.
-- Tự nhập file JSON backup vào UI (đã có xuất JSON và nhập dữ liệu khách IndexedDB).
-- Trang quản trị, chức năng tự xóa tài khoản và chính sách lưu/xóa dữ liệu.
+- Web Push. Hiện nhắc qua file ICS, cần nhập vào ứng dụng lịch và cập nhật khi dự đoán thay đổi.
+- Trang quản trị và chính sách lưu/xóa dữ liệu cho vận hành công khai. Người dùng đã có chức năng tự xóa tài khoản.
 - Tích hợp giám sát, sao lưu tự động, kiểm thử khôi phục và đánh giá bảo mật trước khi đưa dữ liệu thật lên máy chủ.
 
-Ứng dụng tính trung bình từ lịch sử thực tế, dùng mặc định chu kỳ 28 ngày và hành kinh 5 ngày khi chưa đủ dữ liệu. Ngày kết thúc ước tính được tách khỏi ngày do người dùng xác nhận. Bộ file kiểm thử và dependency chỉ phục vụ kiểm thử đã được loại bỏ; dùng `npm run check` và `npm run build` để kiểm tra mã backend. Không tuyên bố mã nguồn đã được kiểm toán bảo mật hoặc đã chạy production.
+Ứng dụng tính trung bình từ lịch sử thực tế, dùng mặc định chu kỳ 28 ngày và hành kinh 5 ngày khi chưa đủ dữ liệu. Ngày kết thúc ước tính được tách khỏi ngày do người dùng xác nhận. Dùng `npm test` cho unit/integration, `npm run test:e2e` cho Chromium; cần `TEST_DATABASE_URL` để chạy PostgreSQL. CI chạy TypeScript, các nhóm test và npm audit. Xem [UPDATES.md](UPDATES.md). Không tuyên bố mã nguồn đã được kiểm toán bảo mật hoặc đã chạy production.
 
 ## Tài liệu tham khảo
 

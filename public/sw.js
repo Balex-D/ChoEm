@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v22-partner-message";
+const CACHE = "cho-em-v24-account-safety";
 const ASSETS = [
   "./",
   "./index.html",
@@ -10,7 +10,15 @@ const ASSETS = [
   "/js/core/api.js",
   "/js/core/icons.js",
   "/js/core/cloud.js",
+  "/js/core/storage.js",
+  "/shared/dates.js",
+  "/shared/backup.js",
+  "/shared/reminders.js",
   "/js/features/account/account.js",
+  "/js/features/account/data-tools.js",
+  "/js/features/account/recovery.js",
+  "/js/features/cycle/calendar-page.js",
+  "/js/features/journal/journal-page.js",
   "/js/features/connections/connections.js",
   ...["Cute", "OmTim", "Sleepy", "Cry", "Angry", "XauHo", "HoldPhone"].map(
     (n) => "./assets/" + n + ".png",

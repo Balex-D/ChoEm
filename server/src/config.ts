@@ -7,6 +7,8 @@ const schema = z.object({
   APP_ORIGIN: z.string().url().default("http://localhost:8080"),
   DATABASE_URL: z.string().min(1),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+  RESEND_API_KEY: z.string().default(""),
+  EMAIL_FROM: z.string().default(""),
 });
 export type Config = z.infer<typeof schema>;
 export function loadConfig(env = process.env): Config {

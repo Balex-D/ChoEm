@@ -8,6 +8,7 @@ import type { Database } from "./db/database.js";
 import { HttpError } from "./common/errors.js";
 import { limit } from "./common/security.js";
 import { authRoutes } from "./modules/auth/routes.js";
+import { recoveryRoutes } from "./modules/auth/recovery.js";
 import { syncRoutes } from "./modules/sync/routes.js";
 import { connectionRoutes } from "./modules/connections/routes.js";
 export function createApp(db: Database, c: Config) {
@@ -77,6 +78,7 @@ export function createApp(db: Database, c: Config) {
   });
   app.use("/api", limit(db, "api", 800));
   app.use(express.json({ limit: "2mb" }));
+  app.use("/api/auth", recoveryRoutes(db, c));
   app.use("/api/auth", authRoutes(db, c));
   app.use("/api/state", syncRoutes(db));
   app.use("/api/connections", connectionRoutes(db, c));

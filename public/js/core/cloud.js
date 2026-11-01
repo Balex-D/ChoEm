@@ -1,4 +1,4 @@
-import { api } from "./api.js";
+import { api, setApiAccount } from "./api.js";
 const clone = (x) => structuredClone(x);
 export class Cloud {
   user = null;
@@ -8,6 +8,7 @@ export class Cloud {
   busy = null;
   status = "Chỉ trên thiết bị";
   sequence = 0;
+  suspended = false;
   constructor(storage, hooks) {
     this.storage = storage;
     this.hooks = hooks;
@@ -17,8 +18,16 @@ export class Cloud {
     this.hooks.status(this.status, this.user);
   }
   async start() {
+    if (typeof BroadcastChannel !== "undefined") {
+      this.channel = new BroadcastChannel("cho-em-session");
+      this.channel.onmessage = ({ data }) => {
+        if (data?.type === "session" && data.id !== (this.user?.id || null))
+          this.suspend();
+      };
+    }
+    window.addEventListener("cho-em:account-changed", () => this.suspend());
     try {
-      const { user } = await api("/auth/me");
+      const { user } = await api("/auth/me", { anonymous: true });
       await this.attach(user);
     } catch (e) {
       if (e.status === 0) {
@@ -27,6 +36,7 @@ export class Cloud {
           const saved = await this.storage.get("account:" + user.id);
           if (saved) {
             this.user = user;
+            setApiAccount(user.id);
             this.envelope = saved;
             this.hooks.remote(clone(saved.state));
           }
@@ -46,30 +56,40 @@ export class Cloud {
     }, 30000);
   }
   async attach(user) {
+    if (this.busy) await this.busy;
     this.user = user;
+    this.suspended = false;
+    setApiAccount(user.id);
     this.expired = false;
     this.conflict = null;
     await this.storage.set("last-account", user);
     this.envelope = await this.storage.get("account:" + user.id);
-    if (this.envelope) {
-      this.hooks.remote(clone(this.envelope.state));
-      await this.sync();
-    } else {
-      const result = await api("/state");
-      this.envelope = { ...result, dirty: false };
-      await this.storage.set("account:" + user.id, this.envelope);
-      this.hooks.remote(clone(result.state));
-      this.changed("Đã đồng bộ");
-    }
+    if (this.envelope) this.hooks.remote(clone(this.envelope.state));
+    else this.hooks.remote(this.hooks.empty());
+    await this.sync();
+  }
+  suspend() {
+    this.suspended = true;
+    this.expired = true;
+    clearTimeout(this.debounce);
+    setApiAccount(this.user?.id || null, true);
+    this.changed("Tài khoản đã đổi ở tab khác · đăng nhập lại");
+    this.hooks.sessionChanged?.();
   }
   async authenticate(mode, input) {
     const { user } = await api("/auth/" + mode, {
       method: "POST",
       body: input,
+      anonymous: true,
     });
+    this.channel?.postMessage({ type: "session", id: user.id });
     await this.attach(user);
   }
   async save(state) {
+    if (this.suspended)
+      throw new Error(
+        "Tài khoản đã thay đổi. Hãy đăng nhập lại trước khi lưu.",
+      );
     if (!this.user) {
       await this.storage.set("state", clone(state));
       return;
@@ -84,7 +104,7 @@ export class Cloud {
   }
   async sync() {
     if (this.busy) return this.busy;
-    if (!this.user || !this.envelope || this.conflict) return;
+    if (!this.user || this.conflict || this.suspended || this.expired) return;
     if (!navigator.onLine) {
       this.changed("Ngoại tuyến · chờ đồng bộ");
       return;
@@ -98,6 +118,15 @@ export class Cloud {
     const userId = this.user.id;
     try {
       this.changed("Đang đồng bộ…");
+      if (!this.envelope) {
+        const result = await api("/state");
+        if (this.user?.id !== userId || this.suspended) return;
+        this.envelope = { ...result, dirty: false };
+        await this.storage.set("account:" + userId, this.envelope);
+        this.hooks.remote(clone(result.state));
+        this.changed("Đã đồng bộ");
+        return;
+      }
       let forecastsUpdated = false;
       while (this.user?.id === userId && this.envelope.dirty) {
         const seq = this.sequence,
@@ -129,7 +158,9 @@ export class Cloud {
           seq === this.sequence &&
           !this.envelope.dirty &&
           this.hooks.canRefresh() &&
-          remote.revision !== this.envelope.revision
+          (remote.revision !== this.envelope.revision ||
+            JSON.stringify(remote.state) !==
+              JSON.stringify(this.envelope.state))
         ) {
           this.envelope = { ...remote, dirty: false };
           await this.storage.set("account:" + userId, this.envelope);
@@ -141,7 +172,9 @@ export class Cloud {
         this.hooks.remote(clone(this.envelope.state));
     } catch (e) {
       if (this.user?.id !== userId) return;
-      if (e.code === "SYNC_CONFLICT") {
+      if (e.code === "ACCOUNT_CHANGED") {
+        this.suspend();
+      } else if (e.code === "SYNC_CONFLICT") {
         this.conflict = e.details;
         this.changed("Có xung đột · mở Tài khoản");
       } else if (e.status === 401) {
@@ -184,6 +217,22 @@ export class Cloud {
     const imported = { ...guest, privacy: { ...this.envelope.state.privacy } };
     await this.save(imported);
     this.hooks.remote(clone(imported));
+    await this.sync();
+  }
+  async restoreBackup(state) {
+    if (this.suspended || (this.user && !this.envelope))
+      throw new Error("Hãy đăng nhập và tải xong dữ liệu trước khi khôi phục.");
+    if (this.conflict)
+      throw new Error("Hãy xử lý xung đột đồng bộ trước khi khôi phục.");
+    const id = this.user?.id;
+    const current = this.envelope?.state || this.hooks.local();
+    await this.storage.set(
+      `backup:${id || "guest"}:${Date.now()}`,
+      clone(current),
+    );
+    const restored = { ...state, privacy: { ...current.privacy } };
+    await this.save(restored);
+    this.hooks.remote(clone(restored));
     await this.sync();
   }
   async changePrivacy(privacy, { hideExistingJournals = false } = {}) {
@@ -242,12 +291,21 @@ export class Cloud {
         "Dữ liệu còn chờ đồng bộ. Hãy xử lý xung đột hoặc kết nối mạng trước khi đăng xuất.",
       );
     await api("/auth/logout", { method: "POST", body: {} });
+    await this.clearAccount();
+  }
+  async clearAccount() {
     const id = this.user.id;
+    clearTimeout(this.debounce);
+    if (this.busy) await this.busy;
     await this.storage.removeAccount(id);
     await this.storage.set("last-account", null);
     this.user = null;
+    setApiAccount(null);
+    this.channel?.postMessage({ type: "session", id: null });
     this.envelope = null;
     this.conflict = null;
+    this.expired = false;
+    this.suspended = false;
     this.hooks.remote((await this.storage.get("state")) || this.hooks.empty());
     this.changed("Chỉ trên thiết bị");
   }

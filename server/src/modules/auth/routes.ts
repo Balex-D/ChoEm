@@ -17,7 +17,7 @@ const credentials = z.object({
 });
 export function authRoutes(db: Database, c: Config) {
   const router = Router();
-  router.get("/me", authenticate(db), (req, res) =>
+  router.get("/me", authenticate(db, true), (req, res) =>
     res.json({ user: req.user }),
   );
   router.patch("/role", authenticate(db), async (req, res) => {
@@ -75,7 +75,7 @@ export function authRoutes(db: Database, c: Config) {
   router.post("/login", limit(db, "login", 12), async (req, res) => {
     const input = credentials.parse(req.body);
     const { rows } = await db.query(
-      "SELECT id,email,password_hash,role FROM users WHERE email=$1",
+      'SELECT id,email,password_hash,role,(email_verified_at IS NOT NULL) AS "emailVerified" FROM users WHERE email=$1',
       [input.email],
     );
     dummyHash ??= hashPassword("unavailable-account-placeholder");
@@ -89,12 +89,29 @@ export function authRoutes(db: Database, c: Config) {
         "INVALID_CREDENTIALS",
         "Email hoặc mật khẩu chưa đúng.",
       );
-    await createSession(db, rows[0].id, res, c);
+    await db.transaction(async (q) => {
+      const { rows: current } = await q.query(
+        "SELECT password_hash FROM users WHERE id=$1 FOR UPDATE",
+        [rows[0].id],
+      );
+      if (current[0]?.password_hash !== rows[0].password_hash)
+        throw new HttpError(
+          401,
+          "INVALID_CREDENTIALS",
+          "Thông tin đăng nhập đã thay đổi. Hãy thử lại.",
+        );
+      await createSession(q, rows[0].id, res, c);
+    });
     res.json({
-      user: { id: rows[0].id, email: rows[0].email, role: rows[0].role },
+      user: {
+        id: rows[0].id,
+        email: rows[0].email,
+        role: rows[0].role,
+        emailVerified: rows[0].emailVerified,
+      },
     });
   });
-  router.post("/logout", async (req, res) => {
+  router.post("/logout", authenticate(db), async (req, res) => {
     await destroySession(db, req, res, c);
     res.status(204).end();
   });
@@ -124,13 +141,23 @@ export function authRoutes(db: Database, c: Config) {
         );
       const encoded = await hashPassword(input.newPassword);
       await db.transaction(async (q) => {
+        const { rows: current } = await q.query(
+          "SELECT password_hash FROM users WHERE id=$1 FOR UPDATE",
+          [req.user!.id],
+        );
+        if (current[0]?.password_hash !== rows[0].password_hash)
+          throw new HttpError(
+            409,
+            "ACCOUNT_CHANGED",
+            "Mật khẩu đã thay đổi. Hãy đăng nhập lại.",
+          );
         await q.query("UPDATE users SET password_hash=$1 WHERE id=$2", [
           encoded,
           req.user!.id,
         ]);
         await q.query("DELETE FROM sessions WHERE user_id=$1", [req.user!.id]);
+        await createSession(q, req.user!.id, res, c);
       });
-      await createSession(db, req.user!.id, res, c);
       res.status(204).end();
     },
   );

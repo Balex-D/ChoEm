@@ -1,3 +1,5 @@
+// @ts-ignore Shared timezone helper.
+import { vietnamDay } from "../../../../shared/dates.js";
 import type { Database, Queryable } from "../../db/database.js";
 import type { AppState } from "./schema.js";
 import { HttpError } from "../../common/errors.js";
@@ -5,13 +7,7 @@ import { HttpError } from "../../common/errors.js";
 import { analyzeCycles } from "../../../../shared/cycle/cycle-analysis.js";
 // @ts-ignore Shared period lifecycle.
 import { resolvePeriods } from "../../../../shared/cycle/period-records.js";
-const vietnamToday = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+const vietnamToday = () => vietnamDay();
 export async function readState(q: Queryable, userId: string) {
   const {
     rows: [p],
@@ -57,7 +53,7 @@ export async function readState(q: Queryable, userId: string) {
     issuedAt: new Date(row.issued_at).toISOString(),
   }));
   return {
-    state: resolvePeriods(state, vietnamToday()) as AppState,
+    state: resolvePeriods(state, vietnamDay()) as AppState,
     revision: p.revision as number,
   };
 }
@@ -72,12 +68,7 @@ export async function getState(db: Database, userId: string) {
   });
 }
 async function ensureForecast(q: Queryable, userId: string, state: AppState) {
-  const today = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  const today = vietnamDay();
   const analysis = analyzeCycles(state, today);
   if (analysis.nextPeriodStart)
     await q.query(
@@ -98,7 +89,7 @@ export async function saveState(
   state: AppState,
   revision: number,
 ) {
-  state = resolvePeriods(state, vietnamToday());
+  state = resolvePeriods(state, vietnamDay());
   return db.transaction(async (q) => {
     const {
       rows: [profile],
@@ -116,47 +107,61 @@ export async function saveState(
         await readState(q, userId),
       );
     await q.query(
-      `UPDATE profiles SET name=$2,share_cycle=$3,share_mood=$4,share_notes=$5,revision=revision+1,updated_at=now() WHERE user_id=$1`,
+      `UPDATE profiles SET name=$2,share_cycle=$3,share_mood=$4,share_notes=$5,
+       share_symptoms=$6,period_estimates=$7::jsonb,symptom_suggestions=$8::jsonb,
+       revision=revision+1,updated_at=now() WHERE user_id=$1`,
       [
         userId,
         state.name,
         state.privacy.cycle,
         state.privacy.mood,
         state.privacy.notes,
+        state.privacy.symptoms,
+        JSON.stringify(state.periodEstimates || {}),
+        JSON.stringify(state.symptomSuggestions),
+      ],
+    );
+    // Two statements per collection, independent of history size. Retain unchanged rows.
+    await q.query(
+      "DELETE FROM cycles WHERE user_id=$1 AND NOT(start_date=ANY($2::date[]))",
+      [userId, state.starts],
+    );
+    await q.query(
+      `INSERT INTO cycles(user_id,start_date,end_date)
+       SELECT $1,x.start,x."end" FROM jsonb_to_recordset($2::jsonb) AS x(start date,"end" date)
+       ON CONFLICT(user_id,start_date) DO UPDATE SET end_date=excluded.end_date
+       WHERE cycles.end_date IS DISTINCT FROM excluded.end_date`,
+      [
+        userId,
+        JSON.stringify(
+          state.starts.map((start) => ({
+            start,
+            end: state.ends[start] || null,
+          })),
+        ),
       ],
     );
     await q.query(
-      "UPDATE profiles SET period_estimates=$2::jsonb WHERE user_id=$1",
-      [userId, JSON.stringify(state.periodEstimates || {})],
+      "DELETE FROM journal_entries WHERE user_id=$1 AND NOT(entry_date=ANY($2::date[]))",
+      [userId, Object.keys(state.entries)],
     );
-    await q.query("DELETE FROM cycles WHERE user_id=$1", [userId]);
-    await q.query("UPDATE profiles SET share_symptoms=$2 WHERE user_id=$1", [
-      userId,
-      state.privacy.symptoms,
-    ]);
     await q.query(
-      "UPDATE profiles SET symptom_suggestions=$2::jsonb WHERE user_id=$1",
-      [userId, JSON.stringify(state.symptomSuggestions)],
+      `INSERT INTO journal_entries(user_id,entry_date,mood,symptoms,note,shared)
+       SELECT $1,x.date,x.mood,x.symptoms,x.note,x.shared
+       FROM jsonb_to_recordset($2::jsonb) AS x(date date,mood text,symptoms jsonb,note text,shared boolean)
+       ON CONFLICT(user_id,entry_date) DO UPDATE SET mood=excluded.mood,symptoms=excluded.symptoms,note=excluded.note,shared=excluded.shared
+       WHERE (journal_entries.mood,journal_entries.symptoms,journal_entries.note,journal_entries.shared)
+         IS DISTINCT FROM (excluded.mood,excluded.symptoms,excluded.note,excluded.shared)`,
+      [
+        userId,
+        JSON.stringify(
+          Object.entries(state.entries).map(([date, entry]) => ({
+            date,
+            ...entry,
+          })),
+        ),
+      ],
     );
-    for (const start of state.starts)
-      await q.query(
-        "INSERT INTO cycles(user_id,start_date,end_date) VALUES($1,$2,$3)",
-        [userId, start, state.ends[start] || null],
-      );
-    await q.query("DELETE FROM journal_entries WHERE user_id=$1", [userId]);
-    for (const [date, entry] of Object.entries(state.entries)) {
-      await q.query(
-        "INSERT INTO journal_entries(user_id,entry_date,mood,symptoms,note,shared) VALUES($1,$2,$3,$4::jsonb,$5,$6)",
-        [
-          userId,
-          date,
-          entry.mood,
-          JSON.stringify(entry.symptoms),
-          entry.note,
-          entry.shared,
-        ],
-      );
-    }
     await q.query(
       "DELETE FROM cycle_forecasts WHERE user_id=$1 AND NOT(anchor_date=ANY($2::date[]))",
       [userId, state.starts],

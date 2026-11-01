@@ -1,3 +1,5 @@
+// @ts-ignore Shared timezone helper.
+import { vietnamDay } from "../../../../shared/dates.js";
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
@@ -223,12 +225,7 @@ export function connectionRoutes(db: Database, c: Config) {
       .string()
       .regex(/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/)
       .parse(req.query.month);
-    const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const today = vietnamDay();
     const shared = await db.transaction(async (q) => {
       const {
         rows: [link],
@@ -252,12 +249,7 @@ export function connectionRoutes(db: Database, c: Config) {
   router.get("/:id/summary", async (req, res) => {
     const id = z.string().uuid().parse(req.params.id);
     const date = dateSchema.parse(req.query.date);
-    const current = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const current = vietnamDay();
     if (date !== current)
       throw new HttpError(
         400,

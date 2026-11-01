@@ -1,3 +1,5 @@
+// @ts-ignore Shared timezone helper.
+import { vietnamDay } from "../../../../shared/dates.js";
 import { z } from "zod";
 export const dateSchema = z
   .string()
@@ -54,14 +56,10 @@ export const stateSchema = z
       Object.keys(state.ends).length > 1000
     )
       error("Quá nhiều bản ghi");
-    const today = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const today = vietnamDay();
     for (const start of state.starts)
       if (start > today) error("Ngày bắt đầu không thể ở tương lai");
+    const sorted = [...state.starts].sort();
     for (const [start, duration] of Object.entries(state.periodEstimates)) {
       if (!state.starts.includes(start))
         error("Ước tính không có kỳ kinh tương ứng");
@@ -72,8 +70,9 @@ export const stateSchema = z
         .slice(0, 10);
       if (state.ends[start] && state.ends[start] !== expected)
         error("Ngày kết thúc ước tính không khớp thời lượng");
+      const next = sorted[sorted.indexOf(start) + 1];
+      if (next && expected >= next) error("Các kỳ kinh không được chồng ngày");
     }
-    const sorted = [...state.starts].sort();
     for (const [start, end] of Object.entries(state.ends)) {
       if (
         !state.starts.includes(start) ||

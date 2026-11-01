@@ -1,3 +1,8 @@
+import { renderJournalPage } from "./features/journal/journal-page.js";
+import { renderCalendarPage } from "./features/cycle/calendar-page.js";
+import { openStorage } from "./core/storage.js";
+import { recoveryLinkDialog } from "./features/account/recovery.js";
+import { vietnamDay } from "/shared/dates.js";
 import {
   analyzeCycles,
   recordLocalForecast,
@@ -26,6 +31,16 @@ let periodDragCleanup = null;
 let periodSaving = false;
 let analysisRange = "3m";
 let pendingInvite = location.hash.startsWith("#invite=") ? location.href : "";
+const recoveryParams = new URLSearchParams(location.hash.slice(1));
+const recoveryAction = recoveryParams.has("verify")
+  ? "verify"
+  : recoveryParams.has("reset")
+    ? "reset"
+    : null;
+const recoveryToken = recoveryAction
+  ? recoveryParams.get(recoveryAction)
+  : null;
+if (recoveryAction) history.replaceState(null, "", location.pathname);
 if (pendingInvite) history.replaceState(null, "", location.pathname);
 const $ = (s) => document.querySelector(s);
 const paths = {
@@ -51,13 +66,6 @@ const moods = [
   ["XauHo", "Nhạy cảm"],
 ];
 const symptoms = ["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"];
-const vietnamDay = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 const today = new Date(vietnamDay() + "T12:00:00");
 today.setHours(12, 0, 0, 0);
 const key = (d) =>
@@ -70,8 +78,7 @@ const add = (d, n) => {
   return x;
 };
 const diff = (a, b) => Math.round((a - b) / 86400000);
-let db,
-  state,
+let state,
   view = "home",
   month = new Date(today.getFullYear(), today.getMonth(), 1, 12),
   selected = todayKey,
@@ -97,47 +104,7 @@ const defaultState = {
 };
 async function init() {
   try {
-    db = await new Promise((resolve, reject) => {
-      const r = indexedDB.open("cho-em", 1);
-      r.onupgradeneeded = () => r.result.createObjectStore("data");
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error);
-    });
-    const storage = {
-      get: (k) =>
-        new Promise((resolve, reject) => {
-          const r = db.transaction("data").objectStore("data").get(k);
-          r.onsuccess = () => resolve(r.result);
-          r.onerror = () => reject(r.error);
-        }),
-      set: (k, v) =>
-        new Promise((resolve, reject) => {
-          const t = db.transaction("data", "readwrite");
-          t.objectStore("data").put(v, k);
-          t.oncomplete = resolve;
-          t.onerror = () => reject(t.error);
-          t.onabort = () => reject(t.error);
-        }),
-      removeAccount: (id) =>
-        new Promise((resolve, reject) => {
-          const t = db.transaction("data", "readwrite"),
-            store = t.objectStore("data");
-          const r = store.openCursor();
-          r.onsuccess = () => {
-            const c = r.result;
-            if (c) {
-              if (
-                c.key === "account:" + id ||
-                String(c.key).startsWith("backup:" + id + ":")
-              )
-                c.delete();
-              c.continue();
-            }
-          };
-          t.oncomplete = resolve;
-          t.onerror = () => reject(t.error);
-        }),
-    };
+    const storage = await openStorage();
     state = {
       ...structuredClone(defaultState),
       ...(await storage.get("state")),
@@ -163,6 +130,13 @@ async function init() {
         !$("#main").classList.contains("period-dragging") &&
         !document.querySelector('[data-space-dirty="true"]') &&
         !hasUnsavedDraft(),
+      sessionChanged: () => {
+        $("#dialog").close();
+        toast(
+          "Tài khoản đã đổi ở tab khác. Hãy mở Tài khoản để đăng nhập lại.",
+        );
+        render();
+      },
     });
     render();
     await cloud.start();
@@ -177,6 +151,14 @@ async function init() {
       view = "connect";
       render();
     }
+    if (recoveryAction)
+      recoveryLinkDialog({
+        action: recoveryAction,
+        token: recoveryToken,
+        open: openDialog,
+        close: () => $("#dialog").close(),
+        toast,
+      });
   } catch (e) {
     state ??= structuredClone(defaultState);
     render();
@@ -538,41 +520,27 @@ function renderHome() {
   };
 }
 function renderCalendar() {
-  const e = state.entries[selected] || {};
-  activeSymptoms = [...(e.symptoms || [])];
-  const type = dayType(parse(selected));
-  $("#main").innerHTML =
-    `<div class="page-intro"><div class="eyebrow">NHỊP ĐIỆU RIÊNG CỦA EM</div><h1>Lịch chu kỳ ${icon("flower")}</h1><p>Mỗi dấu nhỏ là một cách hiểu cơ thể hơn.</p></div>${calendar(true)}<section class="card day-details"><b>${parse(selected).toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</b>${type === "predicted" ? "<p>Ngày kinh dự kiến, chưa được ghi nhận.</p>" : type === "ovulation" ? "<p>Ngày rụng trứng ước tính từ lịch sử đã ghi nhận.</p>" : ""}<div class="note-card day-body-record"><h3 class="mini-title">${icon("pen")} Lắng nghe cơ thể</h3><div class="symptoms"></div><textarea id="note" aria-label="Ghi chú trạng thái cơ thể" rows="2" maxlength="2000">${escape(e.note || "")}</textarea><div class="note-bottom"><span>${cloud?.user ? ((e.shared ?? state.privacy.notes) ? "Ghi chú đang bật chia sẻ ♡" : "Ghi chú đang để riêng tư ♡") : "Chỉ lưu trên thiết bị này ♡"}</span><button class="small-button" id="save-note">Lưu ghi chú ↗</button></div></div></section><p class="privacy-note">Dự đoán chỉ mang tính tham khảo, không dùng làm biện pháp tránh thai.</p>`;
-  bindCalendar();
-  bindSymptoms();
-  const sharing = document.createElement("label");
-  sharing.className = "save-symptom journal-sharing-toggle";
-  sharing.title = "Chia sẻ nhật ký ngày này với Anh khi lưu ghi chú";
-  sharing.innerHTML = `<input type="checkbox" id="share-day-journal" ${(e.shared ?? state.privacy.notes) ? "checked" : ""}> Chia sẻ nhật ký`;
-  const bodyHeading = document.createElement("div");
-  bodyHeading.className = "day-body-heading";
-  const bodyTitle = $(".day-body-record .mini-title");
-  bodyTitle.before(bodyHeading);
-  bodyHeading.append(bodyTitle, sharing);
-  const tools = document.createElement("div");
-  tools.className = "period-tools";
-  tools.innerHTML =
-    '<button class="small-button" id="manage-periods">Các kỳ kinh đã ghi nhận</button>';
-  $(".day-details").append(tools);
-  renderPeriodControls();
-  $("#manage-periods").onclick = managePeriodsDialog;
-  $("#save-note").onclick = async () => {
-    state.entries[selected] = {
-      ...(state.entries[selected] || {}),
-      symptoms: [...activeSymptoms],
-      note: $("#note").value,
-      shared: $("#share-day-journal").checked,
-    };
-    if (await persist()) {
-      renderCalendar();
-      toast("Đã cất ghi chú vào nhật ký ♡");
-    }
-  };
+  return renderCalendarPage({
+    state,
+    selected,
+    cloud,
+    dayType,
+    parse,
+    icon,
+    calendar,
+    escape,
+    bindCalendar,
+    bindSymptoms,
+    renderPeriodControls,
+    managePeriodsDialog,
+    persist,
+    renderCalendar,
+    toast,
+    setSymptoms: (value) => {
+      activeSymptoms = value;
+    },
+    getSymptoms: () => activeSymptoms,
+  });
 }
 function bindSymptoms() {
   const container = $(".symptoms");
@@ -765,75 +733,24 @@ function editPeriodDialog(editStart, proposedStart, proposedEnd) {
   };
 }
 function renderJournal() {
-  $("#main").innerHTML =
-    `<div class="page-intro"><div class="eyebrow">NHỮNG ĐIỀU EM MUỐN NHỚ</div><h1>Nhật ký của em ${icon("clover")}</h1><p>Một chút cảm xúc, một chút lắng nghe mỗi ngày.</p></div>${
-      Object.keys(state.entries).length
-        ? Object.keys(state.entries)
-            .sort()
-            .reverse()
-            .map((d) => {
-              const e = state.entries[d];
-              return `<article class="card entry"><h3>${parse(d).toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h3><span class="pill">${escape(e.mood || "Một ngày của em")}</span> ${(e.symptoms || []).map((x) => `<span class="pill">${escape(x)}</span>`).join(" ")}<p>${escape(e.note || "Em đã dành một chút thời gian để lắng nghe mình.")}</p><button class="text-button" data-delete="${d}">Xóa ghi chú</button></article>`;
-            })
-            .join("")
-        : `<div class="card empty"><img src="assets/Cute.png" alt="Cô gái dễ thương"><h3>Trang nhỏ đang chờ em</h3><p>Ghi lại cảm xúc hôm nay để sau này nhìn lại nhé.</p><button class="primary" id="write-today">Viết cho hôm nay</button></div>`
-    }`;
-  if ($("#write-today"))
-    $("#write-today").onclick = () => {
+  return renderJournalPage({
+    state,
+    cloud,
+    icon,
+    parse,
+    escape,
+    persist,
+    renderJournal,
+    openDialog,
+    toast,
+    writeToday: () => {
       selected = todayKey;
       month = new Date(today.getFullYear(), today.getMonth(), 1, 12);
       view = "calendar";
       render();
       $("#note").focus();
-    };
-  document.querySelectorAll(".entry").forEach((article) => {
-    const date = article.querySelector("[data-delete]").dataset.delete;
-    const entry = state.entries[date];
-    const button = document.createElement("button");
-    button.className = "small-button journal-sharing";
-    button.textContent = entry.shared
-      ? "Ẩn nhật ký với Anh"
-      : "Hiện nhật ký với Anh";
-    button.setAttribute("aria-pressed", String(Boolean(entry.shared)));
-    button.onclick = async () => {
-      button.disabled = true;
-      const enabled = !entry.shared;
-      try {
-        if (cloud?.user) await cloud.changeEntrySharing(date, enabled);
-        else {
-          entry.shared = enabled;
-          if (!(await persist())) return;
-          renderJournal();
-        }
-        toast(
-          enabled
-            ? "Đã chia sẻ trang nhật ký này với Anh ♡"
-            : "Đã ẩn nhật ký với Anh.",
-        );
-      } catch (error) {
-        toast(error.message);
-      } finally {
-        if (button.isConnected) button.disabled = false;
-      }
-    };
-    article.append(button);
+    },
   });
-  document.querySelectorAll("[data-delete]").forEach(
-    (b) =>
-      (b.onclick = () => {
-        openDialog(
-          '<h2>Xóa ghi chú này?</h2><p>Ghi chú sẽ được xóa khỏi thiết bị.</p><button class="primary" id="delete-entry">Xóa ghi chú</button>',
-        );
-        $("#delete-entry").onclick = async () => {
-          delete state.entries[b.dataset.delete];
-          if (await persist()) {
-            $("#dialog").close();
-            renderJournal();
-            toast("Đã xóa ghi chú.");
-          }
-        };
-      }),
-  );
 }
 function renderConnect() {
   if (!cloud) {

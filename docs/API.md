@@ -8,6 +8,7 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 - Giá trị cookie là token ngẫu nhiên 256 bit; database chỉ lưu SHA-256 của token.
 - Mọi POST/PUT/PATCH/DELETE cần `Origin` khớp `APP_ORIGIN`, header `X-Cho-Em: 1`, `Content-Type: application/json`, kể cả logout/delete không có body thì gửi `{}`.
 - Mọi API response có `Cache-Control: no-store`. Không có CORS cho frontend bên ngoài.
+- API dùng session phải gửi thêm `X-Cho-Em-Account: <user.id>` theo tài khoản client đang hiển thị. Thiếu hoặc lệch danh tính trả `409 ACCOUNT_CHANGED`, kể cả GET. `/auth/me` là ngoại lệ để khám phá danh tính cookie. Login/register/capabilities/forgot-password/verify-email/reset-password không cần header tài khoản.
 - Giới hạn request: 800/15 phút/IP chung; login 12, register 5, tạo lời mời 15. Chấp nhận lời mời giới hạn 15 lần/15 phút/IP và 10 lần/15 phút/tài khoản, tính cả mã sai định dạng và yêu cầu thành công; thay IP không đặt lại bộ đếm tài khoản. Bộ đếm dùng database, chia sẻ giữa process; vượt giới hạn trả 429 và `Retry-After`.
 
 ## Endpoints
@@ -19,6 +20,12 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 | POST | `/auth/login` | `{email,password}`; trả user và cookie |
 | POST | `/auth/logout` | Hủy phiên hiện tại |
 | POST | `/auth/change-password` | `{currentPassword,newPassword}`; hủy các phiên cũ và cấp phiên mới |
+| GET | `/auth/capabilities` | `{email:boolean}`; cho biết server đã cấu hình gửi email hay chưa |
+| POST | `/auth/request-verification` | `{}`; cần session và header tài khoản, gửi link xác minh qua email khi người dùng yêu cầu |
+| POST | `/auth/verify-email` | `{token}`; dùng một lần, hạn 30 phút |
+| POST | `/auth/forgot-password` | `{email}`; phản hồi chung cho email có/không có tài khoản; chỉ gửi đến địa chỉ đã xác minh |
+| POST | `/auth/reset-password` | `{token,password}`; dùng một lần, hạn 30 phút, thu hồi mọi session; cần đăng nhập lại |
+| DELETE | `/auth/account` | `{password,confirmation:"XÓA TÀI KHOẢN"}`; xóa vĩnh viễn dữ liệu liên quan và xóa cookie |
 | GET | `/state` | `{state,revision}` của chính tài khoản |
 | PUT | `/state` | `{state,revision}`; đồng bộ snapshot nguyên tử; trả revision mới |
 | PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,symptoms,notes},hideExistingJournals?}`; trả state và revision mới; tùy chọn ẩn nhật ký cũ chỉ dùng khi `notes=false` |

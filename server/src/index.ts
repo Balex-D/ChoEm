@@ -15,6 +15,7 @@ const cleanup = setInterval(
       .then(() =>
         db.query("DELETE FROM connection_invites WHERE expires_at<now()"),
       )
+      .then(() => db.query("DELETE FROM account_tokens WHERE expires_at<now()"))
       .catch(() => console.error("Expired record cleanup failed")),
   3600000,
 );

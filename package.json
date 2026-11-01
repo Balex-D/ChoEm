@@ -13,6 +13,8 @@
     "start:container": "node server/build/index.js",
     "db:migrate": "node --env-file=.env --import tsx server/src/db/migrate.ts",
     "check": "tsc -p server/tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.js",
+    "test:e2e": "npm run build && playwright test",
     "password:reset": "node --env-file=.env --import tsx server/src/modules/auth/reset-password.ts",
     "format": "prettier --write \"public/**/*.js\" \"shared/**/*.js\" \"server/**/*.ts\" \"server/**/*.json\""
   },
@@ -24,6 +26,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",

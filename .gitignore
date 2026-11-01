@@ -5,7 +5,11 @@ node_modules/
 # Build outputs
 server/build/
 build/
+dist/
 coverage/
+test-results/
+playwright-report/
+.test-browsers/
 
 # Environment variables and secrets
 .env

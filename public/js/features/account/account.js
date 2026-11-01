@@ -1,4 +1,10 @@
 import { api } from "../../core/api.js";
+import {
+  importBackupDialog,
+  reminderDialog,
+  deleteAccountDialog,
+} from "./data-tools.js";
+import { forgotPasswordDialog } from "./recovery.js";
 export function accountDialog({
   cloud,
   open,
@@ -17,7 +23,20 @@ export function accountDialog({
     input.oninput = () => input.setCustomValidity("");
   };
   const panel = () => {
-    if (!cloud.user || cloud.expired) {
+    if (!cloud.user) {
+      open(
+        '<h2>Dữ liệu trên thiết bị</h2><div class="account-actions"><button class="primary" id="guest-login">Đăng nhập / Đăng ký</button><button class="small-button" id="guest-export">Xuất bản sao JSON</button><button class="small-button" id="guest-restore">Khôi phục JSON</button><button class="small-button" id="guest-reminder">Nhắc lịch</button></div>',
+      );
+      document.querySelector("#guest-login").onclick = () => authForm("login");
+      document.querySelector("#guest-export").onclick = () =>
+        cloud.exportData();
+      document.querySelector("#guest-restore").onclick = () =>
+        importBackupDialog({ cloud, open, close, escape, toast });
+      document.querySelector("#guest-reminder").onclick = () =>
+        reminderDialog({ cloud, open });
+      return;
+    }
+    if (cloud.expired) {
       authForm("login");
       return;
     }
@@ -53,10 +72,39 @@ export function accountDialog({
       toast("Đã lưu vai trò.");
     });
     run("sync-now", () => cloud.sync());
+    const extra = document.createElement("div");
+    extra.className = "account-actions";
+    extra.innerHTML =
+      '<button class="small-button" id="restore-json">Khôi phục JSON</button><button class="small-button" id="calendar-reminder">Nhắc lịch</button><button class="small-button" id="verify-email">Xác minh email</button><button class="text-button" id="delete-account">Xóa tài khoản</button>';
+    document.querySelector(".account-actions").after(extra);
+    document.querySelector("#restore-json").onclick = () =>
+      importBackupDialog({ cloud, open, close, escape, toast });
+    document.querySelector("#calendar-reminder").onclick = () =>
+      reminderDialog({ cloud, open });
+    document.querySelector("#delete-account").onclick = () =>
+      deleteAccountDialog({ cloud, open, close, toast });
+    const verify = document.querySelector("#verify-email");
+    verify.textContent = cloud.user.emailVerified
+      ? "Email đã xác minh"
+      : "Gửi email xác minh";
+    verify.disabled = Boolean(cloud.user.emailVerified);
+    run("verify-email", async () => {
+      const result = await api("/auth/request-verification", {
+        method: "POST",
+        body: {},
+      });
+      toast(result.message);
+    });
     if (cloud.user.role === "anh") {
       document.querySelector("#dialog-body h2").textContent =
         "Tài khoản của Anh";
-      for (const id of ["sync-now", "export-data", "import-guest"])
+      for (const id of [
+        "sync-now",
+        "export-data",
+        "import-guest",
+        "restore-json",
+        "calendar-reminder",
+      ])
         document.getElementById(id).hidden = true;
     }
     document.querySelector("#export-data").onclick = () => cloud.exportData();
@@ -112,6 +160,21 @@ export function accountDialog({
       `<h2>${mode === "login" ? "Chào em trở lại ♡" : "Một góc nhỏ cho riêng em"}</h2><p>Đăng nhập để đồng bộ và kết nối người đồng hành. Dữ liệu khách hiện có chỉ được đưa lên tài khoản khi em chọn nhập.</p><form id="auth-form">${mode === "register" ? '<label class="form-label" for="account-name">Tên của em</label><input id="account-name" maxlength="24" required autocomplete="nickname">' : ""}<label class="form-label" for="email">Email</label><input id="email" type="email" autocomplete="email" required maxlength="254"><label class="form-label" for="password">Mật khẩu</label><input id="password" type="password" autocomplete="${mode === "login" ? "current-password" : "new-password"}" minlength="6" maxlength="128" required><p id="auth-error" role="alert"></p><button class="primary">${mode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</button></form><button class="text-button" id="auth-switch">${mode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}</button><p>Phiên bản này chưa xác minh email và chưa có email khôi phục mật khẩu. Nếu quên mật khẩu, cần liên hệ người quản trị máy chủ.</p>`,
     );
     validatePassword("#password");
+    const help = document.querySelector("#auth-switch").nextElementSibling;
+    help.textContent =
+      "Xác minh email trong Tài khoản để có thể tự khôi phục mật khẩu. Gửi email cần được quản trị viên cấu hình.";
+    const forgot = document.createElement("button");
+    forgot.className = "text-button";
+    forgot.textContent = "Quên mật khẩu?";
+    forgot.onclick = () => forgotPasswordDialog({ open });
+    help.before(forgot);
+    if (cloud.envelope) {
+      const backup = document.createElement("button");
+      backup.className = "text-button";
+      backup.textContent = "Xuất dữ liệu chưa đồng bộ";
+      backup.onclick = () => cloud.exportData();
+      help.before(backup);
+    }
     if (mode === "register") {
       const form = document.querySelector("#auth-form");
       const tabs = document.createElement("div");

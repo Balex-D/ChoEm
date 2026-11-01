@@ -105,21 +105,27 @@ Nền tảng phải proxy cả giao diện và `/api` trên cùng origin. Nếu 
 
 ## E. Khôi phục mật khẩu do quản trị viên
 
-Hiện chưa tích hợp email reset. Trên môi trường quản trị có Node và dependencies development, dùng:
+Đã có email reset cho địa chỉ đã xác minh khi cấu hình Resend. Với tài khoản chưa xác minh hoặc cần khôi phục thủ công, trên môi trường quản trị có Node và dependencies development, dùng:
 
 ```sh
 npm run password:reset -- diachi@example.com
 ```
 
-Script hỏi mật khẩu mới hai lần bằng nhập ẩn, không nhận mật khẩu qua tham số dòng lệnh. Mọi phiên của tài khoản bị thu hồi sau khi đổi. Chỉ thực hiện sau khi quản trị viên xác minh đúng người yêu cầu; email tài khoản hiện chưa được xác minh tự động.
+Script hỏi mật khẩu mới hai lần bằng nhập ẩn, không nhận mật khẩu qua tham số dòng lệnh. Mọi phiên của tài khoản bị thu hồi sau khi đổi. Chỉ thực hiện sau khi quản trị viên xác minh đúng người yêu cầu; trạng thái xác minh email có thể xem trong Tài khoản.
 
 Container production không cài tsx; nếu vận hành hoàn toàn bằng Docker, có thể dùng một bản checkout quản trị riêng để chạy script này với DATABASE_URL thích hợp. Không mở database ra Internet chỉ để chạy CLI.
 
 ## F. Trước khi đưa vào sử dụng thật
 
-Kiểm tra tài khoản, chia sẻ/tắt chia sẻ, đồng bộ hai thiết bị, xung đột, restore backup, rate limit, log và HTTPS trên hạ tầng thật. Chưa có Web Push, email verification, email reset hoặc trang tự xóa tài khoản. Cần hoàn thiện chính sách dữ liệu, vận hành và kiểm tra bảo mật theo phạm vi sử dụng.
+Kiểm tra tài khoản, chia sẻ/tắt chia sẻ, đồng bộ hai thiết bị, xung đột, restore backup, rate limit, log và HTTPS trên hạ tầng thật. Email verification/reset và tự xóa tài khoản đã có; email cần cấu hình Resend. Nhắc lịch dùng file ICS, chưa có Web Push. Cần hoàn thiện chính sách dữ liệu, vận hành và kiểm tra bảo mật theo phạm vi sử dụng.
 
 Tài liệu chính thức:
 
 - Caddy HTTPS: https://caddyserver.com/docs/automatic-https
 - Docker Compose .env: https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/
+
+## G. Cấu hình email
+
+Chạy migration 007 trước khi khởi động bản mới. Điền `RESEND_API_KEY` và `EMAIL_FROM` trong môi trường server; địa chỉ gửi phải thuộc domain đã xác minh ở Resend. Compose local và production đã chuyển hai biến vào container. Để trống để tắt email; không đưa API key vào frontend hoặc Git.
+
+Người dùng mở Tài khoản → Gửi email xác minh. Chỉ địa chỉ đã xác minh mới nhận liên kết Quên mật khẩu; tài khoản cũ chưa xác minh vẫn có CLI quản trị. Liên kết hạn 30 phút, dùng một lần. Xem [UPDATES.md](UPDATES.md) để cấu hình và kiểm thử.

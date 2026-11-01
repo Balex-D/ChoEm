@@ -20,7 +20,7 @@ export function sharedSummary(state: AppState, today: string) {
       const analysis = analyzeCycles(state, today);
       shared.cycle = {
         day: elapsed + 1,
-        inPeriod: !state.ends[start],
+        inPeriod: !state.ends[start] || today <= state.ends[start],
         nextDate: analysis.nextPeriodStart,
         estimated: true,
       };
@@ -45,7 +45,7 @@ export function sharedDetails(state: AppState, today: string, month: string) {
     result.cycle = latest
       ? {
           day: daysBetween(latest, today) + 1,
-          inPeriod: !state.ends[latest],
+          inPeriod: !state.ends[latest] || today <= state.ends[latest],
           periodLength: state.ends[latest]
             ? daysBetween(latest, state.ends[latest]) + 1
             : null,

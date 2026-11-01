@@ -1,13 +1,6 @@
+import { vietnamDay } from "/shared/dates.js";
 import { api } from "../../core/api.js";
 import { daysBetween } from "/shared/cycle/cycle-analysis.js";
-
-const todayKey = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 
 export async function mountPartnerMessage({
   element,
@@ -39,7 +32,7 @@ export async function mountPartnerMessage({
       slot.replaceChildren();
       return;
     }
-    const elapsed = daysBetween(date, todayKey());
+    const elapsed = daysBetween(date, vietnamDay());
     slot.innerHTML = `<aside class="relationship-counter" aria-label="Ngày bên nhau" title="Từ ${escape(date.split("-").reverse().join("/"))}"><b>${elapsed < 0 ? Math.abs(elapsed) : elapsed + 1}</b><span>${elapsed < 0 ? "ngày nữa đến ngày bên nhau" : "ngày bên nhau"}</span></aside>`;
   };
   const stop = () => {

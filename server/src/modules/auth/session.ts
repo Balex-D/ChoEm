@@ -1,5 +1,5 @@
 import type { RequestHandler, Response, Request } from "express";
-import type { Database } from "../../db/database.js";
+import type { Database, Queryable } from "../../db/database.js";
 import { hashToken, randomToken } from "../../common/security.js";
 import { HttpError } from "../../common/errors.js";
 import type { Config } from "../../config.js";
@@ -7,6 +7,7 @@ export interface Identity {
   id: string;
   email: string;
   role: "anh" | "em";
+  emailVerified?: boolean;
 }
 declare global {
   namespace Express {
@@ -25,7 +26,7 @@ function getCookie(req: Request) {
   return token && /^[a-f0-9]{64}$/.test(token) ? token : null;
 }
 export async function createSession(
-  db: Database,
+  db: Queryable,
   userId: string,
   res: Response,
   c: Config,
@@ -43,14 +44,14 @@ export async function createSession(
     maxAge: 30 * 86400000,
   });
 }
-export function authenticate(db: Database): RequestHandler {
+export function authenticate(db: Database, discover = false): RequestHandler {
   return async (req, _res, next) => {
     try {
       const token = getCookie(req);
       if (!token)
         throw new HttpError(401, "UNAUTHENTICATED", "Vui lòng đăng nhập.");
       const { rows } = await db.query(
-        "SELECT u.id,u.email,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()",
+        'SELECT u.id,u.email,u.role,(u.email_verified_at IS NOT NULL) AS "emailVerified" FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()',
         [hashToken(token)],
       );
       if (!rows.length)
@@ -58,6 +59,12 @@ export function authenticate(db: Database): RequestHandler {
           401,
           "UNAUTHENTICATED",
           "Phiên đăng nhập đã hết hạn.",
+        );
+      if (!discover && req.get("X-Cho-Em-Account") !== rows[0].id)
+        throw new HttpError(
+          409,
+          "ACCOUNT_CHANGED",
+          "Tài khoản đã thay đổi. Hãy đăng nhập lại để tiếp tục.",
         );
       req.user = rows[0] as Identity;
       next();

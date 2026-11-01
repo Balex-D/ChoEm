@@ -1,14 +1,7 @@
+import { vietnamDay } from "/shared/dates.js";
 import { api } from "../../core/api.js";
 import { renderSharedDetails } from "./shared-details.js";
 import { calendarIcon, journalIcon } from "../../core/icons.js";
-
-const todayKey = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 
 export async function mountCompanionDashboard({
   root,
@@ -21,7 +14,7 @@ export async function mountCompanionDashboard({
   showError,
   overviewElement,
 }) {
-  let selected = todayKey();
+  let selected = vietnamDay();
   let month = selected.slice(0, 7);
   let tab = "overview";
   let data = null;
@@ -58,7 +51,7 @@ export async function mountCompanionDashboard({
       if (data)
         target.innerHTML = renderSharedDetails(data, selected, escape, {
           tab,
-          today: todayKey(),
+          today: vietnamDay(),
         });
       syncNavigation();
     }
@@ -116,7 +109,8 @@ export async function mountCompanionDashboard({
   const changeMonth = async (value) => {
     if (!/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(value)) return;
     month = value;
-    selected = month === todayKey().slice(0, 7) ? todayKey() : month + "-01";
+    selected =
+      month === vietnamDay().slice(0, 7) ? vietnamDay() : month + "-01";
     tab = "calendar";
     data = null;
     target.innerHTML = '<p role="status">Đang tải lịch của Em…</p>';
