@@ -14,7 +14,7 @@
     "db:migrate": "node --env-file=.env --import tsx server/src/db/migrate.ts",
     "check": "tsc -p server/tsconfig.json --noEmit",
     "password:reset": "node --env-file=.env --import tsx server/src/modules/auth/reset-password.ts",
-    "format": "prettier --write \"dist/**/*.js\" \"server/**/*.ts\" \"server/**/*.json\""
+    "format": "prettier --write \"public/**/*.js\" \"shared/**/*.js\" \"server/**/*.ts\" \"server/**/*.json\""
   },
   "dependencies": {
     "express": "^5.3.0",

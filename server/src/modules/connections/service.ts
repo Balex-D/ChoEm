@@ -1,8 +1,8 @@
 import type { AppState } from "../sync/schema.js";
 // @ts-ignore Pure calendar model shared with the PWA; same relative path after compilation.
-import { calendarMonth } from "../../../../dist/js/cycle-model.js";
+import { calendarMonth } from "../../../../shared/cycle/cycle-model.js";
 // @ts-ignore Shared deterministic analysis, never manual profile settings.
-import { analyzeCycles } from "../../../../dist/js/cycle-analysis.js";
+import { analyzeCycles } from "../../../../shared/cycle/cycle-analysis.js";
 export function sharedSummary(state: AppState, today: string) {
   // Return only explicitly allowed fields; do not return the complete snapshot to a companion.
   const shared: Record<string, unknown> = { name: state.name };

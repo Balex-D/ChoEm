@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY server/ ./server/
+COPY shared/ ./shared/
 RUN npm run build
 RUN npm prune --omit=dev
 
@@ -13,7 +14,8 @@ COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/server/build ./server/build
 COPY --chown=node:node package*.json ./
 COPY --chown=node:node server/src/db/migrations ./server/src/db/migrations
-COPY --chown=node:node dist ./dist
+COPY --chown=node:node public ./public
+COPY --chown=node:node shared ./shared
 USER node
 EXPOSE 8080
 CMD ["sh", "-c", "node server/build/db/migrate.js && node server/build/index.js"]

@@ -53,7 +53,7 @@ export async function scanConnectionQR({ open, close, onScan }) {
       return fail(
         "Camera cần HTTPS hoặc localhost. Anh có thể nhập mã thủ công hoặc dùng camera điện thoại mở liên kết QR.",
       );
-    await import("../vendor/jsqr.js");
+    await import("../../../vendor/jsqr.js");
     if (stopped) return;
     stream = await navigator.mediaDevices.getUserMedia({
       audio: false,

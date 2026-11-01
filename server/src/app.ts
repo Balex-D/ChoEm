@@ -85,10 +85,11 @@ export function createApp(db: Database, c: Config) {
   );
   app.get("/sw.js", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
-    res.sendFile(resolve("dist/sw.js"));
+    res.sendFile(resolve("public/sw.js"));
   });
+  app.use("/shared", express.static(resolve("shared"), { maxAge: 0 }));
   app.use(
-    express.static(resolve("dist"), {
+    express.static(resolve("public"), {
       index: "index.html",
       etag: true,
       maxAge: 0,

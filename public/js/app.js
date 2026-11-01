@@ -1,11 +1,28 @@
-import { analyzeCycles, recordLocalForecast } from "./js/cycle-analysis.js";
-import { renderCycleOverview, renderCycleNotices, renderCycleCharts } from "./js/cycle-analysis-view.js";
-import { cycleDayType } from "./js/cycle-model.js";
-import { attachPeriodDrag } from "./js/period-drag.js";
-import { resolvePeriods, periodContaining, ongoingPeriod, recordPeriodRange, recordPeriodDragRange, beginPeriod, finishPeriod, removePeriod, periodDayCount } from "./js/period-records.js";
-import { Cloud } from "./js/cloud.js";
-import { accountDialog } from "./js/account.js";
-import { renderConnections } from "./js/connections.js";
+import {
+  analyzeCycles,
+  recordLocalForecast,
+} from "/shared/cycle/cycle-analysis.js";
+import {
+  renderCycleOverview,
+  renderCycleNotices,
+  renderCycleCharts,
+} from "./features/cycle/cycle-analysis-view.js";
+import { cycleDayType } from "/shared/cycle/cycle-model.js";
+import { attachPeriodDrag } from "./features/cycle/period-drag.js";
+import {
+  resolvePeriods,
+  periodContaining,
+  ongoingPeriod,
+  recordPeriodRange,
+  recordPeriodDragRange,
+  beginPeriod,
+  finishPeriod,
+  removePeriod,
+  periodDayCount,
+} from "/shared/cycle/period-records.js";
+import { Cloud } from "./core/cloud.js";
+import { accountDialog } from "./features/account/account.js";
+import { renderConnections } from "./features/connections/connections.js";
 let cloud;
 let periodDragCleanup = null;
 let periodSaving = false;
@@ -36,7 +53,13 @@ const moods = [
   ["XauHo", "Nhạy cảm"],
 ];
 const symptoms = ["Đau bụng", "Đau lưng", "Đau đầu", "Căng ngực"];
-const vietnamDay = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const vietnamDay = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 const today = new Date(vietnamDay() + "T12:00:00");
 today.setHours(12, 0, 0, 0);
 const key = (d) =>
@@ -121,7 +144,8 @@ async function init() {
       ...structuredClone(defaultState),
       ...(await storage.get("state")),
     };
-    delete state.length; delete state.duration;
+    delete state.length;
+    delete state.duration;
     state = recordLocalForecast(state, todayKey);
     await storage.set("state", state);
     cloud = new Cloud(storage, {
@@ -136,7 +160,10 @@ async function init() {
         state = next;
         render();
       },
-      canRefresh: () => !$("#dialog").open && !$("#main").classList.contains("period-dragging") && !hasUnsavedDraft(),
+      canRefresh: () =>
+        !$("#dialog").open &&
+        !$("#main").classList.contains("period-dragging") &&
+        !hasUnsavedDraft(),
     });
     render();
     await cloud.start();
@@ -166,7 +193,8 @@ function hasUnsavedDraft() {
     $("#note").value !== (e.note || "") ||
     JSON.stringify([...activeSymptoms].sort()) !==
       JSON.stringify([...(e.symptoms || [])].sort()) ||
-    ($("#share-day-journal")?.checked ?? false) !== (e.shared ?? Boolean(state.privacy.notes))
+    ($("#share-day-journal")?.checked ?? false) !==
+      (e.shared ?? Boolean(state.privacy.notes))
   );
 }
 async function persist() {
@@ -221,7 +249,9 @@ function renderNav() {
   const isAnh = cloud?.user?.role === "anh";
   document.body.classList.toggle("companion-mode", isAnh);
   for (const id of ["nav", "mobile-nav"]) {
-    $("#" + id).innerHTML = (isAnh ? tabs.filter(t => t[0] === "connect") : tabs)
+    $("#" + id).innerHTML = (
+      isAnh ? tabs.filter((t) => t[0] === "connect") : tabs
+    )
       .map(
         ([v, t, i]) =>
           `<button data-view="${v}" class="${v === view ? "active" : ""}" ${v === view ? 'aria-current="page"' : ""}>${icon(i)}<span>${t}</span></button>`,
@@ -243,11 +273,23 @@ function renderNav() {
 function cycleInfo() {
   const analysis = analyzeCycles(state, todayKey);
   const start = analysis.lastPeriodStart;
-  if (!start) return { exists:false, analysis, next:null, remain:null };
-  const next = analysis.nextPeriodStart ? parse(analysis.nextPeriodStart) : null;
-  return { exists:true,start,day:diff(today,parse(start))+1,next,remain:next?diff(next,today):null,inPeriod:!state.ends[start],analysis };
+  if (!start) return { exists: false, analysis, next: null, remain: null };
+  const next = analysis.nextPeriodStart
+    ? parse(analysis.nextPeriodStart)
+    : null;
+  return {
+    exists: true,
+    start,
+    day: diff(today, parse(start)) + 1,
+    next,
+    remain: next ? diff(next, today) : null,
+    inPeriod: !state.ends[start],
+    analysis,
+  };
 }
-function dayType(d) { return cycleDayType(state, key(d), todayKey); }
+function dayType(d) {
+  return cycleDayType(state, key(d), todayKey);
+}
 function hasBodyRecord(k) {
   const e = state.entries[k];
   return !!(e && ((e.symptoms || []).length || (e.note || "").trim()));
@@ -275,18 +317,27 @@ function calendar(wide = false) {
 }
 function bindCalendar({ keepDrag = false } = {}) {
   if (!$(".period-drag-help")) {
-    const help = document.createElement("p"); help.className = "period-drag-help";
-    help.textContent = "Nhấn giữ và kéo để ghi nhận khoảng ngày. Giữ sát mép lịch để chuyển tháng. Kéo từ ngày đã ghi để sửa ngày kết thúc.";
+    const help = document.createElement("p");
+    help.className = "period-drag-help";
+    help.textContent =
+      "Nhấn giữ và kéo để ghi nhận khoảng ngày. Giữ sát mép lịch để chuyển tháng. Kéo từ ngày đã ghi để sửa ngày kết thúc.";
     $(".calendar-card").append(help);
   }
   const heading = $(".calendar-heading h3");
   heading.innerHTML = `<button class="calendar-jump" id="jump-month" aria-label="Chọn tháng">Tháng ${month.getMonth() + 1}</button>, <button class="calendar-jump" id="jump-year" aria-label="Chọn năm">${month.getFullYear()}</button>`;
   const jump = (focus) => {
-    openDialog(`<h2>Chọn tháng và năm</h2><form id="jump-calendar"><label class="form-label" for="calendar-month">Tháng</label><select id="calendar-month">${Array.from({length:12}, (_, i) => `<option value="${i}" ${i === month.getMonth() ? "selected" : ""}>Tháng ${i+1}</option>`).join("")}</select><label class="form-label" for="calendar-year">Năm</label><input id="calendar-year" type="number" min="1900" max="2199" required value="${month.getFullYear()}"><button class="primary">Xem lịch</button></form>`);
+    openDialog(
+      `<h2>Chọn tháng và năm</h2><form id="jump-calendar"><label class="form-label" for="calendar-month">Tháng</label><select id="calendar-month">${Array.from({ length: 12 }, (_, i) => `<option value="${i}" ${i === month.getMonth() ? "selected" : ""}>Tháng ${i + 1}</option>`).join("")}</select><label class="form-label" for="calendar-year">Năm</label><input id="calendar-year" type="number" min="1900" max="2199" required value="${month.getFullYear()}"><button class="primary">Xem lịch</button></form>`,
+    );
     $(focus).focus();
     $("#jump-calendar").onsubmit = (event) => {
       event.preventDefault();
-      month = new Date(Number($("#calendar-year").value), Number($("#calendar-month").value), 1, 12);
+      month = new Date(
+        Number($("#calendar-year").value),
+        Number($("#calendar-month").value),
+        1,
+        12,
+      );
       $("#dialog").close();
       render();
     };
@@ -312,27 +363,55 @@ function bindCalendar({ keepDrag = false } = {}) {
   if (!keepDrag) {
     periodDragCleanup?.();
     periodDragCleanup = attachPeriodDrag({
-      root: $("#main"), today: todayKey, canStart: () => !periodSaving && cloud?.user?.role !== "anh",
-      anchorForDay: day => { const period = periodContaining(state, day, todayKey); return { start:period?.start || day, editStart:period?.start || null, end:period?.end || null }; },
-      onCommit: (from,to,editStart) => savePeriodChange(current => recordPeriodDragRange(current,from,to,todayKey,editStart), to),
-      onError: error => toast(error.message),
-      onMonth: direction => {
-        const next = new Date(month.getFullYear(),month.getMonth()+direction,1,12);
-        if (next.getFullYear()<1900 || next > new Date(today.getFullYear(),today.getMonth(),1,12)) return null;
+      root: $("#main"),
+      today: todayKey,
+      canStart: () => !periodSaving && cloud?.user?.role !== "anh",
+      anchorForDay: (day) => {
+        const period = periodContaining(state, day, todayKey);
+        return {
+          start: period?.start || day,
+          editStart: period?.start || null,
+          end: period?.end || null,
+        };
+      },
+      onCommit: (from, to, editStart) =>
+        savePeriodChange(
+          (current) =>
+            recordPeriodDragRange(current, from, to, todayKey, editStart),
+          to,
+        ),
+      onError: (error) => toast(error.message),
+      onMonth: (direction) => {
+        const next = new Date(
+          month.getFullYear(),
+          month.getMonth() + direction,
+          1,
+          12,
+        );
+        if (
+          next.getFullYear() < 1900 ||
+          next > new Date(today.getFullYear(), today.getMonth(), 1, 12)
+        )
+          return null;
         month = next;
         const card = $(".calendar-card");
         const wide = card.classList.contains("wide-calendar");
         card.outerHTML = calendar(wide);
-        bindCalendar({ keepDrag:true });
-        const end = new Date(month.getFullYear(),month.getMonth()+1,0,12);
-        return direction > 0 ? key(month) : key(end) > todayKey ? todayKey : key(end);
+        bindCalendar({ keepDrag: true });
+        const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 12);
+        return direction > 0
+          ? key(month)
+          : key(end) > todayKey
+            ? todayKey
+            : key(end);
       },
     });
   }
 }
 function render() {
   state = resolvePeriods(state, todayKey);
-  periodDragCleanup?.(); periodDragCleanup = null;
+  periodDragCleanup?.();
+  periodDragCleanup = null;
   if (cloud?.user?.role === "anh") view = "connect";
   renderNav();
   if (view === "home") renderHome();
@@ -341,41 +420,90 @@ function render() {
   if (view === "connect") renderConnect();
 }
 function refreshCalendarDate() {
-  if (!state || $("#dialog").open || $("#main").classList.contains("period-dragging") || hasUnsavedDraft()) return;
+  if (
+    !state ||
+    $("#dialog").open ||
+    $("#main").classList.contains("period-dragging") ||
+    hasUnsavedDraft()
+  )
+    return;
   const current = new Date(vietnamDay() + "T12:00:00");
   const nextKey = key(current);
   if (nextKey === todayKey) return;
   const followingToday = selected === todayKey;
-  today.setTime(current.getTime()); todayKey = nextKey;
-  if (followingToday) { selected = todayKey; month = new Date(today.getFullYear(),today.getMonth(),1,12); }
+  today.setTime(current.getTime());
+  todayKey = nextKey;
+  if (followingToday) {
+    selected = todayKey;
+    month = new Date(today.getFullYear(), today.getMonth(), 1, 12);
+  }
   render();
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCalendarDate(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshCalendarDate();
+});
 window.addEventListener("pageshow", refreshCalendarDate);
-setInterval(() => { if (!document.hidden) refreshCalendarDate(); },60000);
+setInterval(() => {
+  if (!document.hidden) refreshCalendarDate();
+}, 60000);
 async function savePeriodChange(change, selectedDay = selected) {
   if (periodSaving) return false;
   periodSaving = true;
   const previous = structuredClone(state);
   try {
-    if (view === "calendar" && hasUnsavedDraft()) state.entries[selected] = { ...(state.entries[selected] || {}), symptoms:[...activeSymptoms], note:$("#note").value, shared:$("#share-day-journal").checked };
+    if (view === "calendar" && hasUnsavedDraft())
+      state.entries[selected] = {
+        ...(state.entries[selected] || {}),
+        symptoms: [...activeSymptoms],
+        note: $("#note").value,
+        shared: $("#share-day-journal").checked,
+      };
     state = change(state);
-    if (!(await persist())) { state = previous; return false; }
+    if (!(await persist())) {
+      state = previous;
+      return false;
+    }
     selected = selectedDay;
-    month = new Date(parse(selected).getFullYear(),parse(selected).getMonth(),1,12);
+    month = new Date(
+      parse(selected).getFullYear(),
+      parse(selected).getMonth(),
+      1,
+      12,
+    );
     view = "calendar";
     if ($("#dialog").open) $("#dialog").close();
     render();
     toast("Đã lưu kỳ kinh của Em ♡");
     return true;
-  } catch (error) { state = previous; toast(error.message); return false; }
-  finally { periodSaving = false; }
+  } catch (error) {
+    state = previous;
+    toast(error.message);
+    return false;
+  } finally {
+    periodSaving = false;
+  }
 }
 function renderCycleHero(c) {
   const a = c.analysis;
-  const displayDate = day => day ? day.split("-").reverse().join("/") : "Chưa đủ dữ liệu";
-  const data = [["Chu kỳ trung bình",a.averageCycleLength === null ? "Chưa đủ dữ liệu" : `${a.averageCycleLength} ngày`],["Hành kinh trung bình",a.averagePeriodLength === null ? "Chưa đủ dữ liệu" : `${a.averagePeriodLength} ngày`],["Kỳ kinh gần nhất",displayDate(a.lastPeriodStart)],["Kỳ tiếp theo dự kiến",displayDate(a.nextPeriodStart)]];
-  return `<section class="card cycle-card"><div class="card-top"><span>Chu kỳ của Em</span><span class="pill">${c.inPeriod ? "♡ Đang ghi nhận kỳ kinh" : "♡ Nhịp điệu riêng"}</span></div><div class="cycle-center"><div class="cycle-text"><p>Mình cùng</p><h2>hiểu em</h2><p>từng ngày một nhé! ♡</p></div><img class="hero-sticker" src="assets/OmTim.png" alt="Cô gái ôm trái tim"><span class="spark">✧</span></div><div class="hero-cycle-data">${c.inPeriod ? `<p class="hero-period-status">Đang ghi nhận: ngày thứ ${c.day}</p>` : ""}<dl>${data.map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join("")}</dl></div><button class="primary" id="period-action">${icon("calendar")} ${c.inPeriod?"Kết thúc kỳ kinh":"Ghi nhận kỳ kinh"}</button></section>`;
+  const displayDate = (day) =>
+    day ? day.split("-").reverse().join("/") : "Chưa đủ dữ liệu";
+  const data = [
+    [
+      "Chu kỳ trung bình",
+      a.averageCycleLength === null
+        ? "Chưa đủ dữ liệu"
+        : `${a.averageCycleLength} ngày`,
+    ],
+    [
+      "Hành kinh trung bình",
+      a.averagePeriodLength === null
+        ? "Chưa đủ dữ liệu"
+        : `${a.averagePeriodLength} ngày`,
+    ],
+    ["Kỳ kinh gần nhất", displayDate(a.lastPeriodStart)],
+    ["Kỳ tiếp theo dự kiến", displayDate(a.nextPeriodStart)],
+  ];
+  return `<section class="card cycle-card"><div class="card-top"><span>Chu kỳ của Em</span><span class="pill">${c.inPeriod ? "♡ Đang ghi nhận kỳ kinh" : "♡ Nhịp điệu riêng"}</span></div><div class="cycle-center"><div class="cycle-text"><p>Mình cùng</p><h2>hiểu em</h2><p>từng ngày một nhé! ♡</p></div><img class="hero-sticker" src="assets/OmTim.png" alt="Cô gái ôm trái tim"><span class="spark">✧</span></div><div class="hero-cycle-data">${c.inPeriod ? `<p class="hero-period-status">Đang ghi nhận: ngày thứ ${c.day}</p>` : ""}<dl>${data.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("")}</dl></div><button class="primary" id="period-action">${icon("calendar")} ${c.inPeriod ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button></section>`;
 }
 function renderHome() {
   const c = cycleInfo(),
@@ -390,8 +518,7 @@ function renderHome() {
   $("#main").innerHTML =
     `<div class="greeting"><div><div class="eyebrow">MỘT CHÚT QUAN TÂM MỖI NGÀY</div><h1>Chào ${escape(state.name)}, ngày mới dịu dàng <img class="greeting-star" src="assets/greeting-star.png" alt="" aria-hidden="true"></h1><p>Cơ thể đang kể chuyện, mình cùng lắng nghe nhé.</p></div><div class="date-tag">${icon("calendar")}${date}</div></div><div class="dashboard-grid">${renderCycleHero(c)}${calendar()}</div><div class="section-title"><h2>Hôm nay em cảm thấy thế nào?</h2><span>Cảm xúc nào cũng đáng được ôm ♡</span></div><section class="card mood-box"><div class="mood-options">${moods.map(([img, label]) => `<button class="mood-option ${activeMood === label ? "chosen" : ""}" data-mood="${label}" aria-pressed="${activeMood === label}"><img src="assets/${img}.png" alt=""><span>${label}</span>${activeMood === label ? '<b class="mood-check">✓</b>' : ""}</button>`).join("")}</div></section><div class="lower-grid"><section class="card care-card"><h3 class="mini-title">✧ Một chút dịu dàng</h3><p>Không cần phải luôn tràn đầy năng lượng.<br>Một cốc nước ấm, một khoảng nghỉ nhỏ.<br>Hôm nay, cứ nhẹ nhàng với mình thôi.</p><button id="care-link">Ghé góc người đồng hành ↗</button><img src="assets/HoldPhone.png" alt="Cô gái cầm điện thoại"></section></div><div class="privacy-note">${icon("lock")} ${cloud?.user ? "Góc nhỏ riêng tư. Dữ liệu được đồng bộ theo tài khoản của em." : "Góc nhỏ riêng tư. Dữ liệu của em được lưu trên thiết bị này."}</div>`;
   bindCalendar();
-  $("#period-action").onclick = () =>
-    handlePeriodAction(todayKey);
+  $("#period-action").onclick = () => handlePeriodAction(todayKey);
   document.querySelectorAll("[data-mood]").forEach(
     (b) =>
       (b.onclick = async () => {
@@ -427,7 +554,8 @@ function renderCalendar() {
   $("#note").after(sharing);
   const tools = document.createElement("div");
   tools.className = "period-tools";
-  tools.innerHTML = '<button class="small-button" id="manage-periods">Các kỳ kinh đã ghi nhận</button>';
+  tools.innerHTML =
+    '<button class="small-button" id="manage-periods">Các kỳ kinh đã ghi nhận</button>';
   $(".day-details").append(tools);
   renderPeriodControls();
   $("#manage-periods").onclick = managePeriodsDialog;
@@ -452,22 +580,35 @@ function bindSymptoms() {
   const draw = () => {
     const suggestions = state.symptomSuggestions ?? symptoms;
     const options = [...new Set([...suggestions, ...activeSymptoms])];
-    container.innerHTML = options.map((s, i) => `<span class="symptom-item"><button class="chip ${activeSymptoms.includes(s) ? "selected" : ""}" data-option="${i}" aria-pressed="${activeSymptoms.includes(s)}">${escape(s)}</button>${editing && suggestions.includes(s) ? `<button class="remove-symptom" data-remove="${i}" aria-label="Xóa gợi ý ${escape(s)}">×</button>` : ""}</span>`).join("") + (editing ? '<button class="chip add-symptom" aria-label="Thêm biểu hiện">＋</button>' : "");
-    container.querySelectorAll("[data-option]").forEach(b => {
+    container.innerHTML =
+      options
+        .map(
+          (s, i) =>
+            `<span class="symptom-item"><button class="chip ${activeSymptoms.includes(s) ? "selected" : ""}" data-option="${i}" aria-pressed="${activeSymptoms.includes(s)}">${escape(s)}</button>${editing && suggestions.includes(s) ? `<button class="remove-symptom" data-remove="${i}" aria-label="Xóa gợi ý ${escape(s)}">×</button>` : ""}</span>`,
+        )
+        .join("") +
+      (editing
+        ? '<button class="chip add-symptom" aria-label="Thêm biểu hiện">＋</button>'
+        : "");
+    container.querySelectorAll("[data-option]").forEach((b) => {
       b.onclick = () => {
         const s = options[Number(b.dataset.option)];
-        activeSymptoms = activeSymptoms.includes(s) ? activeSymptoms.filter(x => x !== s) : [...activeSymptoms, s];
+        activeSymptoms = activeSymptoms.includes(s)
+          ? activeSymptoms.filter((x) => x !== s)
+          : [...activeSymptoms, s];
         draw();
       };
     });
-    container.querySelectorAll("[data-remove]").forEach(b => {
+    container.querySelectorAll("[data-remove]").forEach((b) => {
       b.onclick = () => {
         const s = options[Number(b.dataset.remove)];
-        openDialog(`<h2>Xóa gợi ý biểu hiện?</h2><p>“${escape(s)}” sẽ không còn trong gợi ý cho các ngày sau. Nhật ký đã lưu vẫn được giữ.</p><button class="primary" id="confirm-remove-symptom">Xóa gợi ý</button> <button class="small-button" id="cancel-remove-symptom">Hủy</button>`);
+        openDialog(
+          `<h2>Xóa gợi ý biểu hiện?</h2><p>“${escape(s)}” sẽ không còn trong gợi ý cho các ngày sau. Nhật ký đã lưu vẫn được giữ.</p><button class="primary" id="confirm-remove-symptom">Xóa gợi ý</button> <button class="small-button" id="cancel-remove-symptom">Hủy</button>`,
+        );
         $("#cancel-remove-symptom").onclick = () => $("#dialog").close();
         $("#confirm-remove-symptom").onclick = async () => {
           const previous = state.symptomSuggestions;
-          state.symptomSuggestions = suggestions.filter(x => x !== s);
+          state.symptomSuggestions = suggestions.filter((x) => x !== s);
           if (await persist()) {
             $("#dialog").close();
             draw();
@@ -476,27 +617,40 @@ function bindSymptoms() {
       };
     });
     const addButton = container.querySelector(".add-symptom");
-    if (addButton) addButton.onclick = () => {
-      openDialog('<h2>Thêm biểu hiện</h2><form id="add-symptom-form"><label class="form-label" for="symptom-name">Biểu hiện của em</label><input id="symptom-name" maxlength="60" required><label class="save-symptom"><input id="remember-symptom" type="checkbox"> Lưu triệu chứng vào gợi ý cho các ngày sau</label><p id="symptom-error" role="alert"></p><button class="primary">Thêm biểu hiện</button></form>');
-      $("#symptom-name").focus();
-      $("#add-symptom-form").onsubmit = async event => {
-        event.preventDefault();
-        const s = $("#symptom-name").value.trim();
-        const remember = $("#remember-symptom").checked;
-        if (!s) return $("#symptom-error").textContent = "Hãy nhập biểu hiện của em.";
-        if ((!activeSymptoms.includes(s) && activeSymptoms.length >= 50) || (remember && !suggestions.includes(s) && suggestions.length >= 50)) return $("#symptom-error").textContent = "Có thể lưu tối đa 50 biểu hiện.";
-        if (remember && !suggestions.includes(s)) {
-          const previous = state.symptomSuggestions;
-          state.symptomSuggestions = [...suggestions, s];
-          if (!(await persist())) { state.symptomSuggestions = previous; return; }
-        }
-        if (!activeSymptoms.includes(s)) activeSymptoms.push(s);
-        $("#dialog").close();
-        draw();
+    if (addButton)
+      addButton.onclick = () => {
+        openDialog(
+          '<h2>Thêm biểu hiện</h2><form id="add-symptom-form"><label class="form-label" for="symptom-name">Biểu hiện của em</label><input id="symptom-name" maxlength="60" required><label class="save-symptom"><input id="remember-symptom" type="checkbox"> Lưu triệu chứng vào gợi ý cho các ngày sau</label><p id="symptom-error" role="alert"></p><button class="primary">Thêm biểu hiện</button></form>',
+        );
+        $("#symptom-name").focus();
+        $("#add-symptom-form").onsubmit = async (event) => {
+          event.preventDefault();
+          const s = $("#symptom-name").value.trim();
+          const remember = $("#remember-symptom").checked;
+          if (!s)
+            return ($("#symptom-error").textContent =
+              "Hãy nhập biểu hiện của em.");
+          if (
+            (!activeSymptoms.includes(s) && activeSymptoms.length >= 50) ||
+            (remember && !suggestions.includes(s) && suggestions.length >= 50)
+          )
+            return ($("#symptom-error").textContent =
+              "Có thể lưu tối đa 50 biểu hiện.");
+          if (remember && !suggestions.includes(s)) {
+            const previous = state.symptomSuggestions;
+            state.symptomSuggestions = [...suggestions, s];
+            if (!(await persist())) {
+              state.symptomSuggestions = previous;
+              return;
+            }
+          }
+          if (!activeSymptoms.includes(s)) activeSymptoms.push(s);
+          $("#dialog").close();
+          draw();
+        };
       };
-    };
   };
-  title.querySelector("button").onclick = event => {
+  title.querySelector("button").onclick = (event) => {
     editing = !editing;
     event.currentTarget.setAttribute("aria-pressed", editing);
     draw();
@@ -504,56 +658,110 @@ function bindSymptoms() {
   draw();
 }
 function handlePeriodAction(day) {
-  const existing = periodContaining(state,day,todayKey);
+  const existing = periodContaining(state, day, todayKey);
   if (existing && !existing.ongoing) return editPeriodDialog(existing.start);
-  const active = ongoingPeriod(state,todayKey);
-  if (active && day >= active.start) return savePeriodChange(current => finishPeriod(current,active.start,day,todayKey), day);
-  return savePeriodChange(current => beginPeriod(current,day,todayKey), day);
+  const active = ongoingPeriod(state, todayKey);
+  if (active && day >= active.start)
+    return savePeriodChange(
+      (current) => finishPeriod(current, active.start, day, todayKey),
+      day,
+    );
+  return savePeriodChange(
+    (current) => beginPeriod(current, day, todayKey),
+    day,
+  );
 }
 function renderPeriodControls() {
-  const existing = periodContaining(state,selected,todayKey);
-  const active = ongoingPeriod(state,todayKey);
+  const existing = periodContaining(state, selected, todayKey);
+  const active = ongoingPeriod(state, todayKey);
   const ending = active && selected >= active.start;
   const recorded = existing && !existing.ongoing;
   const completed = recorded && Boolean(state.ends[existing.start]);
-  const estimated = completed && Boolean(state.periodEstimates?.[existing.start]);
+  const estimated =
+    completed && Boolean(state.periodEstimates?.[existing.start]);
   const future = selected > todayKey;
   const panel = document.createElement("div");
   panel.className = "period-action-panel";
-  panel.innerHTML = `<button class="primary" id="selected-period-action" ${future ? "disabled" : ""}>${recorded ? "Chỉnh sửa kỳ kinh" : ending ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button><p>${future ? "Ngày tương lai chỉ hiển thị dự kiến. Em có thể ghi nhận khi ngày đó đến." : completed ? `Đã hoàn tất · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start,existing.end)} ngày hành kinh` : recorded ? `Đã ghi ngày bắt đầu ${existing.start}. Em bổ sung ngày kết thúc để tính thời gian hành kinh thực tế nhé.` : ending ? `Đang ghi nhận từ ${active.start} · ${periodDayCount(active.start,todayKey)} ngày. Nhấn kết thúc để lấy ngày ${parse(selected).toLocaleDateString("vi-VN")} đang chọn làm ngày cuối cùng.` : "Ghi nhận ngày đang chọn là ngày bắt đầu kỳ kinh."}</p>${existing ? '<button class="text-button" id="adjust-period-range">Sửa khoảng ngày</button> <button class="text-button" id="remove-selected-period">Xóa khoảng đã ghi</button>' : ""}`;
-  if (estimated) panel.querySelector("p").textContent = `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
+  panel.innerHTML = `<button class="primary" id="selected-period-action" ${future ? "disabled" : ""}>${recorded ? "Chỉnh sửa kỳ kinh" : ending ? "Kết thúc kỳ kinh" : "Ghi nhận kỳ kinh"}</button><p>${future ? "Ngày tương lai chỉ hiển thị dự kiến. Em có thể ghi nhận khi ngày đó đến." : completed ? `Đã hoàn tất · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày hành kinh` : recorded ? `Đã ghi ngày bắt đầu ${existing.start}. Em bổ sung ngày kết thúc để tính thời gian hành kinh thực tế nhé.` : ending ? `Đang ghi nhận từ ${active.start} · ${periodDayCount(active.start, todayKey)} ngày. Nhấn kết thúc để lấy ngày ${parse(selected).toLocaleDateString("vi-VN")} đang chọn làm ngày cuối cùng.` : "Ghi nhận ngày đang chọn là ngày bắt đầu kỳ kinh."}</p>${existing ? '<button class="text-button" id="adjust-period-range">Sửa khoảng ngày</button> <button class="text-button" id="remove-selected-period">Xóa khoảng đã ghi</button>' : ""}`;
+  if (estimated)
+    panel.querySelector("p").textContent =
+      `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
   $(".day-details > b").after(panel);
-  panel.querySelector("#selected-period-action").onclick = async event => { event.target.disabled = true; await handlePeriodAction(selected); if(event.target.isConnected) event.target.disabled = future; };
+  panel.querySelector("#selected-period-action").onclick = async (event) => {
+    event.target.disabled = true;
+    await handlePeriodAction(selected);
+    if (event.target.isConnected) event.target.disabled = future;
+  };
   if (existing) {
-    panel.querySelector("#adjust-period-range").onclick = () => editPeriodDialog(existing.start);
-    panel.querySelector("#remove-selected-period").onclick = () => confirmRemovePeriod(existing.start);
+    panel.querySelector("#adjust-period-range").onclick = () =>
+      editPeriodDialog(existing.start);
+    panel.querySelector("#remove-selected-period").onclick = () =>
+      confirmRemovePeriod(existing.start);
   }
   const charts = document.createElement("div");
-  charts.innerHTML = renderCycleCharts(analyzeCycles(state,todayKey));
+  charts.innerHTML = renderCycleCharts(analyzeCycles(state, todayKey));
   $(".day-details").after(charts);
-
 }
 function managePeriodsDialog() {
-  openDialog(`<h2>Các kỳ kinh đã ghi nhận</h2>${state.starts.length ? [...state.starts].sort().reverse().map(start => `<div class="period-history"><b>Bắt đầu: ${escape(start)}</b><p>${state.ends[start] ? `Kết thúc: ${escape(state.ends[start])} · ${periodDayCount(start,state.ends[start])} ngày` : "Chưa ghi nhận ngày kết thúc"}</p><button class="small-button" data-edit-period="${start}">Chỉnh sửa</button> <button class="text-button" data-remove-period="${start}">Xóa kỳ kinh</button></div>`).join("") : "<p>Chưa có kỳ kinh được ghi nhận.</p>"}`);
-  document.querySelectorAll("[data-edit-period]").forEach(button => button.onclick = () => editPeriodDialog(button.dataset.editPeriod));
-  document.querySelectorAll("[data-remove-period]").forEach(button => button.onclick = () => confirmRemovePeriod(button.dataset.removePeriod));
+  openDialog(
+    `<h2>Các kỳ kinh đã ghi nhận</h2>${
+      state.starts.length
+        ? [...state.starts]
+            .sort()
+            .reverse()
+            .map(
+              (start) =>
+                `<div class="period-history"><b>Bắt đầu: ${escape(start)}</b><p>${state.ends[start] ? `Kết thúc: ${escape(state.ends[start])} · ${periodDayCount(start, state.ends[start])} ngày` : "Chưa ghi nhận ngày kết thúc"}</p><button class="small-button" data-edit-period="${start}">Chỉnh sửa</button> <button class="text-button" data-remove-period="${start}">Xóa kỳ kinh</button></div>`,
+            )
+            .join("")
+        : "<p>Chưa có kỳ kinh được ghi nhận.</p>"
+    }`,
+  );
+  document
+    .querySelectorAll("[data-edit-period]")
+    .forEach(
+      (button) =>
+        (button.onclick = () => editPeriodDialog(button.dataset.editPeriod)),
+    );
+  document
+    .querySelectorAll("[data-remove-period]")
+    .forEach(
+      (button) =>
+        (button.onclick = () =>
+          confirmRemovePeriod(button.dataset.removePeriod)),
+    );
 }
 function confirmRemovePeriod(start) {
-  openDialog(`<h2>Xóa kỳ kinh này?</h2><p>Xóa khoảng ngày bắt đầu từ ${escape(start)}. Nhật ký vẫn được giữ.</p><button class="primary" id="confirm-remove-period">Xóa kỳ kinh</button>`);
-  $("#confirm-remove-period").onclick = () => savePeriodChange(current => removePeriod(current,start));
+  openDialog(
+    `<h2>Xóa kỳ kinh này?</h2><p>Xóa khoảng ngày bắt đầu từ ${escape(start)}. Nhật ký vẫn được giữ.</p><button class="primary" id="confirm-remove-period">Xóa kỳ kinh</button>`,
+  );
+  $("#confirm-remove-period").onclick = () =>
+    savePeriodChange((current) => removePeriod(current, start));
 }
 function editPeriodDialog(editStart, proposedStart, proposedEnd) {
   const start = editStart || proposedStart;
-  const end = editStart ? (state.ends[editStart] > todayKey ? "" : state.ends[editStart] || "") : proposedEnd || "";
-  openDialog(`<h2>${editStart ? "Chỉnh sửa kỳ kinh" : "Ghi nhận kỳ kinh"}</h2><form id="edit-period-form"><label class="form-label" for="actual-period-start">Ngày bắt đầu</label><input type="date" id="actual-period-start" required max="${todayKey}" value="${start}"><label class="form-label" for="actual-period-end">Ngày kết thúc</label><input type="date" id="actual-period-end" min="${start}" max="${todayKey}" value="${end}"><p>Ngày đầu và ngày cuối đều được tính. Để trống ngày kết thúc nếu kỳ kinh vẫn tiếp tục. Các khoảng trùng hoặc liền nhau sẽ được gộp.</p><button class="primary">Lưu thay đổi</button></form>`);
-  $("#actual-period-start").oninput = event => { $("#actual-period-end").min = event.target.value; };
-  $("#edit-period-form").onsubmit = async event => {
+  const end = editStart
+    ? state.ends[editStart] > todayKey
+      ? ""
+      : state.ends[editStart] || ""
+    : proposedEnd || "";
+  openDialog(
+    `<h2>${editStart ? "Chỉnh sửa kỳ kinh" : "Ghi nhận kỳ kinh"}</h2><form id="edit-period-form"><label class="form-label" for="actual-period-start">Ngày bắt đầu</label><input type="date" id="actual-period-start" required max="${todayKey}" value="${start}"><label class="form-label" for="actual-period-end">Ngày kết thúc</label><input type="date" id="actual-period-end" min="${start}" max="${todayKey}" value="${end}"><p>Ngày đầu và ngày cuối đều được tính. Để trống ngày kết thúc nếu kỳ kinh vẫn tiếp tục. Các khoảng trùng hoặc liền nhau sẽ được gộp.</p><button class="primary">Lưu thay đổi</button></form>`,
+  );
+  $("#actual-period-start").oninput = (event) => {
+    $("#actual-period-end").min = event.target.value;
+  };
+  $("#edit-period-form").onsubmit = async (event) => {
     event.preventDefault();
-    const from = $("#actual-period-start").value, to = $("#actual-period-end").value;
-    if (to && to < from) return toast("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
-    await savePeriodChange(current => {
-      const base = editStart ? removePeriod(current,editStart) : current;
-      return to ? recordPeriodRange(base,from,to,todayKey) : beginPeriod(base,from,todayKey);
+    const from = $("#actual-period-start").value,
+      to = $("#actual-period-end").value;
+    if (to && to < from)
+      return toast("Ngày kết thúc phải từ ngày bắt đầu trở đi.");
+    await savePeriodChange((current) => {
+      const base = editStart ? removePeriod(current, editStart) : current;
+      return to
+        ? recordPeriodRange(base, from, to, todayKey)
+        : beginPeriod(base, from, todayKey);
     }, from);
   };
 }
@@ -579,22 +787,35 @@ function renderJournal() {
       render();
       $("#note").focus();
     };
-  document.querySelectorAll(".entry").forEach(article => {
+  document.querySelectorAll(".entry").forEach((article) => {
     const date = article.querySelector("[data-delete]").dataset.delete;
     const entry = state.entries[date];
     const button = document.createElement("button");
     button.className = "small-button journal-sharing";
-    button.textContent = entry.shared ? "Ẩn nhật ký với Anh" : "Hiện nhật ký với Anh";
+    button.textContent = entry.shared
+      ? "Ẩn nhật ký với Anh"
+      : "Hiện nhật ký với Anh";
     button.setAttribute("aria-pressed", String(Boolean(entry.shared)));
     button.onclick = async () => {
       button.disabled = true;
       const enabled = !entry.shared;
       try {
         if (cloud?.user) await cloud.changeEntrySharing(date, enabled);
-        else { entry.shared = enabled; if (!(await persist())) return; renderJournal(); }
-        toast(enabled ? "Đã chia sẻ trang nhật ký này với Anh ♡" : "Đã ẩn nhật ký với Anh.");
-      } catch (error) { toast(error.message); }
-      finally { if (button.isConnected) button.disabled = false; }
+        else {
+          entry.shared = enabled;
+          if (!(await persist())) return;
+          renderJournal();
+        }
+        toast(
+          enabled
+            ? "Đã chia sẻ trang nhật ký này với Anh ♡"
+            : "Đã ẩn nhật ký với Anh.",
+        );
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        if (button.isConnected) button.disabled = false;
+      }
     };
     article.append(button);
   });
@@ -633,12 +854,19 @@ function renderConnect() {
 }
 function settingsDialog() {
   if (cloud?.user?.role === "anh") return openAccount();
-  openDialog(`<h2>Tên gọi thân thương</h2><label class="form-label" for="name">Mình gọi em là</label><input id="name" maxlength="24" required value="${escape(state.name)}"><button class="primary" id="save-settings">Lưu tên gọi</button>`);
-  $("#save-settings").onclick=async()=>{
-    const name=$("#name").value.trim();
-    if(!name||name.length>24)return toast("Em nhập tên từ 1 đến 24 ký tự nhé.");
-    state.name=name;
-    if(await persist()){$("#dialog").close();render();toast("Đã lưu tên gọi của Em.");}
+  openDialog(
+    `<h2>Tên gọi thân thương</h2><label class="form-label" for="name">Mình gọi em là</label><input id="name" maxlength="24" required value="${escape(state.name)}"><button class="primary" id="save-settings">Lưu tên gọi</button>`,
+  );
+  $("#save-settings").onclick = async () => {
+    const name = $("#name").value.trim();
+    if (!name || name.length > 24)
+      return toast("Em nhập tên từ 1 đến 24 ký tự nhé.");
+    state.name = name;
+    if (await persist()) {
+      $("#dialog").close();
+      render();
+      toast("Đã lưu tên gọi của Em.");
+    }
   };
 }
 $("#settings").onclick = settingsDialog;

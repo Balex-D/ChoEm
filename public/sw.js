@@ -1,13 +1,16 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v14-selected-period-end";
+const CACHE = "cho-em-v15-project-structure";
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css",
-  "./app.js",
+  "./styles/app.css",
+  "./js/app.js",
   "./manifest.json",
   "./icon.svg",
-  ...["api", "cloud", "account", "connections"].map((n) => "./js/" + n + ".js"),
+  "/js/core/api.js",
+  "/js/core/cloud.js",
+  "/js/features/account/account.js",
+  "/js/features/connections/connections.js",
   ...["Cute", "OmTim", "Sleepy", "Cry", "Angry", "XauHo", "HoldPhone"].map(
     (n) => "./assets/" + n + ".png",
   ),
@@ -17,16 +20,16 @@ const ASSETS = [
   "./assets/clover.png",
   "./assets/heart.png",
   "./assets/greeting-star.png",
-  "./js/connection-code.js",
-  "./js/qr-scanner.js",
-  "./js/invite-dialog.js",
-  "./js/shared-view.js",
-  "./js/shared-details.js",
-  "./js/cycle-model.js",
-  "./js/cycle-analysis.js",
-  "./js/cycle-analysis-view.js",
-  "./js/period-records.js",
-  "./js/period-drag.js",
+  "/js/features/connections/connection-code.js",
+  "/js/features/connections/qr-scanner.js",
+  "/js/features/connections/invite-dialog.js",
+  "/js/features/connections/shared-view.js",
+  "/js/features/connections/shared-details.js",
+  "/shared/cycle/cycle-model.js",
+  "/shared/cycle/cycle-analysis.js",
+  "/js/features/cycle/cycle-analysis-view.js",
+  "/shared/cycle/period-records.js",
+  "/js/features/cycle/period-drag.js",
   "./vendor/jsqr.js",
 ];
 const ALLOWED = new Set(

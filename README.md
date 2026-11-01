@@ -73,7 +73,7 @@ npm run build
 npm start
 ```
 
-Build chỉ biên dịch backend sang `server/build`; frontend trong `dist` đã là HTML/CSS/JS có thể phục vụ trực tiếp.
+Build chỉ biên dịch backend sang `server/build`; frontend trong `public` và logic dùng chung trong `shared` được phục vụ trực tiếp bởi Node.
 
 ## 4. Dùng tài khoản và kết nối thật
 
@@ -127,13 +127,38 @@ Nếu ngày kết thúc dự kiến đúng hôm nay, kỳ kinh vẫn mở để 
 
 ## 5. Đọc code ở đâu?
 
+```text
+public/                     Frontend được phục vụ cho trình duyệt
+  index.html                Trang khởi đầu
+  styles/app.css            Giao diện
+  js/app.js                 Khởi tạo, điều phối các màn hình
+  js/core/                  Gọi API và đồng bộ offline
+  js/features/account/      Giao diện tài khoản
+  js/features/connections/  Kết nối, QR và giao diện chia sẻ
+  js/features/cycle/        Hiển thị phân tích và thao tác kéo lịch
+  assets/                   Ảnh, biểu tượng
+  vendor/                   Thư viện quét QR và giấy phép
+  sw.js                     Service Worker và cache offline
+shared/cycle/               Quy tắc tính chu kỳ, dự đoán và ghi nhận kỳ kinh
+server/src/                 Backend, API và truy cập database
+server/src/db/migrations/   Lịch sử cập nhật cấu trúc database
+server/build/               Backend đã biên dịch, không sửa trực tiếp
+docs/                       Tài liệu kiến trúc, API và triển khai
+```
+
+`public/js/core/api.js` là hàm gọi API phía trình duyệt; các endpoint API được xử lý trong `server/src/modules/`. Các module trong `shared/cycle/` không phụ thuộc giao diện hay database, được cả frontend và backend sử dụng. Node phục vụ chúng tại `/shared/cycle/` để hỗ trợ tính toán offline.
+
 | Muốn thay đổi | File/thư mục |
 | --- | --- |
-| Giao diện, màu, vị trí khối | `dist/style.css`, `dist/app.js`, `dist/index.html` |
-| Gọi API và lỗi mạng | `dist/js/api.js` |
-| Đồng bộ, offline, xung đột | `dist/js/cloud.js` |
-| Màn hình tài khoản | `dist/js/account.js` |
-| UI kết nối và chia sẻ | `dist/js/connections.js` |
+| Giao diện, màu, vị trí khối | `public/styles/app.css`, `public/js/app.js`, `public/index.html` |
+| Gọi API và lỗi mạng | `public/js/core/api.js` |
+| Đồng bộ, offline, xung đột | `public/js/core/cloud.js` |
+| Màn hình tài khoản | `public/js/features/account/account.js` |
+| UI kết nối và chia sẻ | `public/js/features/connections/connections.js` |
+| Công thức chu kỳ và dự đoán | `shared/cycle/cycle-analysis.js` |
+| Quy tắc ghi nhận và kết thúc kỳ kinh | `shared/cycle/period-records.js` |
+| Phân loại ngày trên lịch | `shared/cycle/cycle-model.js` |
+| Giao diện phân tích và kéo lịch | `public/js/features/cycle/` |
 | Đăng nhập, phiên, mật khẩu | `server/src/modules/auth/` |
 | Kiểu dữ liệu và lưu chu kỳ/nhật ký | `server/src/modules/sync/` |
 | Kết nối và lọc dữ liệu chia sẻ | `server/src/modules/connections/` |
@@ -154,6 +179,6 @@ Không sửa file trong `server/build` vì đó là kết quả biên dịch. Kh
 
 ## 7. Deploy và cập nhật
 
-**Không chỉ kéo `dist` lên Netlify Drop cho bản backend.** Hãy chạy Node service + PostgreSQL cùng domain hoặc thiết lập reverse proxy phù hợp. Bộ cấu hình production có Caddy cấp HTTPS, app Node và PostgreSQL: [DEPLOY.md](docs/DEPLOY.md).
+Hãy chạy Node service + PostgreSQL cùng domain hoặc thiết lập reverse proxy phù hợp. Không chỉ đưa thư mục `public` lên hosting tĩnh vì ứng dụng còn cần API và thư mục `shared`. Bộ cấu hình production có Caddy cấp HTTPS, app Node và PostgreSQL: [DEPLOY.md](docs/DEPLOY.md).
 
 Khi cập nhật bản Docker đang chạy, dùng `docker compose up --build -d app`. Container tự chạy migration trên database Docker trước khi khởi động ứng dụng. Lệnh `npm run db:migrate` chạy trực tiếp trên máy sử dụng `DATABASE_URL` trong `.env`; chỉ dùng khi cấu hình đó trỏ đúng database cần cập nhật.

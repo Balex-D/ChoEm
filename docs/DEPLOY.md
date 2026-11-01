@@ -21,7 +21,7 @@ Mở http://localhost:8080. Sau đó đăng ký hai tài khoản, ghi nhật ký
 - Mở TCP 80 và 443 cho Caddy. Không mở PostgreSQL trực tiếp ra Internet.
 - Máy chủ cần truy cập được Docker registry, npm registry và dịch vụ cấp chứng chỉ TLS trong lần build/khởi tạo.
 
-Upload toàn bộ source, gồm package-lock.json, dist, server, Dockerfile, Caddyfile và compose.production.yaml. Không upload node_modules, server/build từ máy cá nhân hoặc `.env` development đang dùng.
+Upload toàn bộ source, gồm package-lock.json, public, shared, server, Dockerfile, Caddyfile và compose.production.yaml. Không upload node_modules, server/build từ máy cá nhân hoặc `.env` development đang dùng.
 
 ### Tạo cấu hình riêng trên máy chủ
 
@@ -68,7 +68,7 @@ docker compose -f compose.production.yaml up --build -d
 
 Thêm bảng/cột bằng migration SQL mới; không đổi nội dung migration đã áp dụng. Migrations chạy trong giao dịch và được ghi checksum. Dùng thay đổi tương thích ngược nếu cần rollback image; rollback source không tự rollback schema/data.
 
-Nếu đổi tài nguyên PWA cache, tăng tên `CACHE` trong `dist/sw.js`. Người dùng cần mở app khi có mạng để nhận phiên bản mới.
+Nếu đổi tài nguyên PWA cache, tăng tên `CACHE` trong `public/sw.js`. Người dùng cần mở app khi có mạng để nhận phiên bản mới.
 
 ## C. Sao lưu database
 
@@ -97,7 +97,7 @@ Bộ source không phụ thuộc nhà cung cấp. Cần:
 - Migrate trước khi khởi động: `node server/build/db/migrate.js`.
 - Start: `node server/build/index.js`.
 - Biến môi trường: `NODE_ENV=production`, `APP_ORIGIN=https://<domain>`, `DATABASE_URL=<ket-noi-db>`, `PORT=<port-nha-cung-cap>`. Chỉ đặt `TRUST_PROXY_HOPS` theo đúng số proxy tin cậy của hạ tầng.
-- Giữ thư mục `dist` và `server/src/db/migrations` trong artifact runtime.
+- Giữ thư mục `public`, `shared` và `server/src/db/migrations` trong artifact runtime.
 - Không đặt DATABASE_URL hoặc mật khẩu vào frontend.
 - Nếu DB bên ngoài yêu cầu TLS, dùng cấu hình TLS/chứng chỉ đúng theo nhà cung cấp, không tắt xác minh chứng chỉ để bỏ qua lỗi.
 

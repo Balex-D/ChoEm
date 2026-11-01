@@ -1,4 +1,4 @@
-import { api } from "./api.js";
+import { api } from "../../core/api.js";
 import { invitationDialog } from "./invite-dialog.js";
 import { renderSharedDetails } from "./shared-details.js";
 import { parseConnectionCode } from "./connection-code.js";

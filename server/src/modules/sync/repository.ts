@@ -2,9 +2,9 @@ import type { Database, Queryable } from "../../db/database.js";
 import type { AppState } from "./schema.js";
 import { HttpError } from "../../common/errors.js";
 // @ts-ignore Pure rule-based analysis shared with the PWA.
-import { analyzeCycles } from "../../../../dist/js/cycle-analysis.js";
+import { analyzeCycles } from "../../../../shared/cycle/cycle-analysis.js";
 // @ts-ignore Shared period lifecycle.
-import { resolvePeriods } from "../../../../dist/js/period-records.js";
+import { resolvePeriods } from "../../../../shared/cycle/period-records.js";
 const vietnamToday = () =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Ho_Chi_Minh",

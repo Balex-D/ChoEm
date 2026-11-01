@@ -1,7 +1,7 @@
 import {
   renderCycleOverview,
   renderCycleNotices,
-} from "./cycle-analysis-view.js";
+} from "../cycle/cycle-analysis-view.js";
 export function renderSharedDetails(s, selected, escape) {
   if (!["calendar", "moods", "symptoms", "journal"].some((key) => key in s))
     return '<p class="shared-empty">Em chưa bật chia sẻ thông tin.</p>';
