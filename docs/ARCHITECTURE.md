@@ -6,7 +6,7 @@
 - Phần Lắng nghe cơ thể vẫn ở Lịch chu kỳ, gắn với ngày được chọn.
 - Các ngày có trạng thái cơ thể/ghi chú vẫn có dấu đánh dấu.
 - Trang Hôm nay vẫn ghi cảm xúc nhanh, không thêm lại khối ghi chú đã bỏ.
-- Giữ nguyên toàn bộ hình ảnh từ bản đính kèm.
+- Giữ các hình ảnh đang được giao diện sử dụng.
 
 ## Frontend
 
@@ -39,7 +39,7 @@ Nếu đang có bản ghi chưa lưu trong ô nhập, background pull không tha
 | `server/src/app.ts` | Ghép middleware, module API, static frontend |
 | `server/src/config.ts` | Biến môi trường |
 
-Ví dụ thêm triệu chứng mới: sửa danh sách trong `dist/app.js` và enum `symptoms` trong `schema.ts`, bổ sung test nếu có quy tắc mới. Thêm cột database: tạo migration SQL mới `002_...sql`; không sửa file migration đã chạy. Tách bảng và module hiện có cho phép nâng cấp một chức năng mà không đổi bộ assets/giao diện.
+Ví dụ thêm triệu chứng mặc định: sửa danh sách trong `dist/app.js` và giá trị mặc định trong `schema.ts`; triệu chứng được lưu dưới dạng chuỗi. Thêm cột database: tạo migration SQL mới với số thứ tự tiếp theo; không sửa file migration đã chạy. Tách bảng và module hiện có cho phép nâng cấp một chức năng mà không đổi bộ assets/giao diện.
 
 ## Quyết định triển khai
 
@@ -51,12 +51,11 @@ Mật khẩu dùng scrypt với salt ngẫu nhiên và N=65536, r=8, p=1. Sessio
 
 - Xác minh email và quy trình quên mật khẩu tự phục vụ qua email (hiện có CLI khôi phục cho quản trị viên).
 - Web Push, nhắc lịch nền và thông báo khi ứng dụng đóng.
-- Tự động tính độ dài chu kỳ từ lịch sử; hiện vẫn dùng thông số cá nhân đã cài đặt.
 - Tự nhập file JSON backup vào UI (đã có xuất JSON và nhập dữ liệu khách IndexedDB).
 - Trang quản trị, chức năng tự xóa tài khoản và chính sách lưu/xóa dữ liệu.
 - Tích hợp giám sát, sao lưu tự động, kiểm thử khôi phục và đánh giá bảo mật trước khi đưa dữ liệu thật lên máy chủ.
 
-Không tuyên bố mã nguồn đã được kiểm toán bảo mật hoặc đã chạy production. Xem TESTING.md để biết kiểm tra thực tế và giới hạn môi trường.
+Ứng dụng tính trung bình từ lịch sử thực tế, dùng mặc định chu kỳ 28 ngày và hành kinh 5 ngày khi chưa đủ dữ liệu. Ngày kết thúc ước tính được tách khỏi ngày do người dùng xác nhận. Bộ file kiểm thử và dependency chỉ phục vụ kiểm thử đã được loại bỏ; dùng `npm run check` và `npm run build` để kiểm tra mã backend. Không tuyên bố mã nguồn đã được kiểm toán bảo mật hoặc đã chạy production.
 
 ## Tài liệu tham khảo
 

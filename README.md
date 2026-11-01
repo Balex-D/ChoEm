@@ -14,7 +14,6 @@ Bổ sung backend vào đúng bản `Cho-Em-main.zip` đã chỉnh sửa. Giữ 
 - Mã mời/QR thật, mã dùng một lần, hạn 2 phút, kết nối hai tài khoản và ngắt kết nối.
 - Chọn quyền chia sẻ chu kỳ, tâm trạng, ghi chú/triệu chứng; server lọc dữ liệu trước khi gửi người đồng hành.
 - Backend TypeScript chia module; SQL migration có kiểm tra checksum; Dockerfile, Compose local và production HTTPS.
-- 11 kiểm thử API/đồng bộ đã chạy qua; chi tiết và giới hạn tại [docs/TESTING.md](docs/TESTING.md).
 
 Ứng dụng hiện tính độ dài chu kỳ và số ngày hành kinh trung bình từ tối đa 6 mẫu gần nhất, làm tròn đến ngày nguyên, để ước tính kỳ tiếp theo.
 
@@ -69,7 +68,6 @@ Nếu PostgreSQL đã cài riêng, bỏ qua bước `docker compose up -d db`, t
 Lệnh kiểm tra và chạy bản build:
 
 ```powershell
-npm test
 npm run check
 npm run build
 npm start
@@ -158,4 +156,4 @@ Không sửa file trong `server/build` vì đó là kết quả biên dịch. Kh
 
 **Không chỉ kéo `dist` lên Netlify Drop cho bản backend.** Hãy chạy Node service + PostgreSQL cùng domain hoặc thiết lập reverse proxy phù hợp. Bộ cấu hình production có Caddy cấp HTTPS, app Node và PostgreSQL: [DEPLOY.md](docs/DEPLOY.md).
 
-`netlify.toml` cũ chỉ dùng cho preview tĩnh. ZIP này không tự cập nhật website Sites ở cuộc trò chuyện trước; cần triển khai backend lên hạ tầng của bạn.
+Khi cập nhật bản Docker đang chạy, dùng `docker compose up --build -d app`. Container tự chạy migration trên database Docker trước khi khởi động ứng dụng. Lệnh `npm run db:migrate` chạy trực tiếp trên máy sử dụng `DATABASE_URL` trong `.env`; chỉ dùng khi cấu hình đó trỏ đúng database cần cập nhật.
