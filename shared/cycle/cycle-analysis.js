@@ -18,7 +18,7 @@ const mean = (values) =>
     : null;
 
 // Only observed starts and explicitly completed periods are statistical evidence.
-export function analyzeCycles(state, today) {
+export function analyzeCycles(state, today, { limit = 6 } = {}) {
   const starts = [...new Set(state.starts || [])]
     .filter((day) => validDay(day) && day <= today)
     .sort();
@@ -30,7 +30,7 @@ export function analyzeCycles(state, today) {
       value: daysBetween(starts[i], start),
     }))
     .filter((item) => item.value > 0)
-    .slice(-6);
+    .slice(-(limit ?? Infinity));
   const completed = starts
     .map((start, i) => ({
       start,
@@ -50,7 +50,7 @@ export function analyzeCycles(state, today) {
       end,
       value: daysBetween(start, end) + 1,
     }))
-    .slice(-6);
+    .slice(-(limit ?? Infinity));
   const averageCycleLength = mean(cycles.map((item) => item.value)) ?? 28;
   const averagePeriodLength = mean(completed.map((item) => item.value)) ?? 5;
   const lastPeriodStart = starts.at(-1) || null;

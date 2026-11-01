@@ -11,9 +11,23 @@ import { HttpError } from "../../common/errors.js";
 import { dateSchema } from "../sync/schema.js";
 import { readState } from "../sync/repository.js";
 import { sharedSummary, sharedDetails } from "./service.js";
+import {
+  getConnectionSpace,
+  updateConnectionSpace,
+  spacePatchSchema,
+} from "./space.js";
 export function connectionRoutes(db: Database, c: Config) {
   const router = Router();
   router.use(authenticate(db));
+  router.get("/:id/space", async (req, res) => {
+    const id = z.string().uuid().parse(req.params.id);
+    res.json(await getConnectionSpace(db, id, req.user!.id));
+  });
+  router.patch("/:id/space", async (req, res) => {
+    const id = z.string().uuid().parse(req.params.id);
+    const input = spacePatchSchema.parse(req.body);
+    res.json(await updateConnectionSpace(db, id, req.user!.id, input));
+  });
   router.get("/", async (req, res) => {
     const { rows } = await db.query(
       `SELECT c.id,c.owner_id,c.companion_id,p.name AS owner_name,p2.name AS companion_name FROM connections c

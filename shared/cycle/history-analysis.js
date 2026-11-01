@@ -1,8 +1,46 @@
 import { analyzeCycles } from "./cycle-analysis.js";
 
+export const HISTORY_RANGES = [
+  { key: "3m", label: "3 tháng", months: 3 },
+  { key: "6m", label: "6 tháng", months: 6 },
+  { key: "1y", label: "1 năm", months: 12 },
+  { key: "2y", label: "2 năm", months: 24 },
+  { key: "all", label: "Toàn bộ", months: null },
+];
+
+export function historyRange(today, key = "3m") {
+  const range =
+    HISTORY_RANGES.find((item) => item.key === key) || HISTORY_RANGES[0];
+  if (range.months === null)
+    return { ...range, start: "1900-01-01", end: today };
+  const [year, month, day] = today.split("-").map(Number);
+  const target = new Date(Date.UTC(year, month - 1 - range.months, 1, 12));
+  const lastDay = new Date(
+    Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  target.setUTCDate(Math.min(day, lastDay));
+  return { ...range, start: target.toISOString().slice(0, 10), end: today };
+}
+
 // Describe recorded observations only. Defaults and estimated ends are not evidence.
-export function analyzeHistory(state, today) {
-  const analysis = analyzeCycles(state, today);
+export function analyzeHistory(state, today, rangeKey = "3m") {
+  const range = historyRange(today, rangeKey);
+  const current = analyzeCycles(state, today);
+  const analysis = analyzeCycles(
+    {
+      ...state,
+      starts: (state.starts || []).filter((start) => start >= range.start),
+    },
+    today,
+    { limit: null },
+  );
+  // Range statistics use all confirmed observations; forecasts retain their
+  // existing recent-history model and never change when switching this filter.
+  analysis.lastPeriodStart = current.lastPeriodStart;
+  analysis.nextPeriodStart = current.nextPeriodStart;
+  analysis.nextPeriodEnd = current.nextPeriodEnd;
+  if (!analysis.cycles.length) analysis.averageCycleLength = null;
+  if (!analysis.completed.length) analysis.averagePeriodLength = null;
   const highlights = [];
   const changes = [];
   const missing = [];
@@ -12,14 +50,14 @@ export function analyzeHistory(state, today) {
     const average = Math.round(
       values.reduce((sum, value) => sum + value, 0) / values.length,
     );
-    return `${label}: ${rows.length} mẫu gần nhất, trung bình ${average} ngày, từ ${Math.min(...values)} đến ${Math.max(...values)} ngày.`;
+    return `${label}: ${rows.length} mẫu trong khoảng đang xem, trung bình ${average} ngày, từ ${Math.min(...values)} đến ${Math.max(...values)} ngày.`;
   };
   if (cycles.length) highlights.push(describe(cycles, "Độ dài chu kỳ"));
   if (completed.length)
     highlights.push(describe(completed, "Thời gian hành kinh đã xác nhận"));
   if (!starts.length)
     missing.push(
-      "Chưa có ngày bắt đầu kỳ kinh. Em có thể ghi nhận trên lịch để bắt đầu theo dõi.",
+      "Chưa có ngày bắt đầu kỳ kinh trong khoảng đang xem. Em có thể chọn khoảng rộng hơn hoặc ghi nhận trên lịch.",
     );
   else if (!cycles.length)
     missing.push(
@@ -62,16 +100,17 @@ export function analyzeHistory(state, today) {
     );
   if (ongoing) missing.push(`${ongoing} kỳ chưa ghi nhận ngày kết thúc.`);
 
-  const journalStart = starts.slice(-7)[0] || null;
-  const entries = journalStart
-    ? Object.entries(state.entries || {}).filter(
-        ([day, entry]) =>
-          day >= journalStart &&
-          day <= today &&
-          entry &&
-          (entry.mood || entry.symptoms?.length || entry.note?.trim()),
-      )
-    : [];
+  const entries = Object.entries(state.entries || {}).filter(
+    ([day, entry]) =>
+      day >= range.start &&
+      day <= today &&
+      entry &&
+      (entry.mood || entry.symptoms?.length || entry.note?.trim()),
+  );
+  const journalStart =
+    range.key === "all"
+      ? [...starts, ...entries.map(([day]) => day)].sort()[0] || null
+      : range.start;
   const counts = new Map();
   for (const [, entry] of entries) {
     for (const symptom of new Set(
@@ -84,7 +123,7 @@ export function analyzeHistory(state, today) {
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "vi"))
     .slice(0, 3)
     .map(([name, days]) => ({ name, days }));
-  if (starts.length && !entries.length)
+  if (!entries.length)
     missing.push(
       "Chưa có nhật ký trong khoảng đang xem để tổng hợp biểu hiện cơ thể.",
     );
@@ -101,5 +140,7 @@ export function analyzeHistory(state, today) {
     symptoms,
     journalStart,
     journalDays: entries.length,
+    range,
+    analysis,
   };
 }

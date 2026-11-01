@@ -81,11 +81,21 @@ Build chỉ biên dịch backend sang `server/build`; frontend trong `public` v�
 2. Mỗi tài khoản lưu dữ liệu riêng. Nếu đã có dữ liệu khách trên cùng trình duyệt/domain, mở Tài khoản → Nhập dữ liệu khách trên thiết bị. Đây là thao tác thay thế, có cảnh báo trước.
 3. Trên tài khoản chính, mở Người đồng hành → Tạo mã mời và QR. Chỉ gửi mã cho đúng người muốn kết nối.
 4. Tài khoản Anh đăng nhập trên trình duyệt/thiết bị khác, mở Người đồng hành → Quét QR bằng camera → Gửi yêu cầu liên kết. Có thể mở link QR hoặc dán mã thủ công. QR chỉ chứa mã mời, không chứa UUID Em; backend tự ánh xạ mã về tài khoản. Camera cần HTTPS hoặc localhost, hình ảnh không gửi lên máy chủ.
-5. Tài khoản chính bật từng mục muốn chia sẻ. Mặc định mọi cờ của tài khoản mới đều tắt. Người đồng hành chỉ đọc được ngày hiện tại.
+5. Tài khoản chính bật từng mục muốn chia sẻ. Mặc định mọi cờ của tài khoản mới đều tắt. Người đồng hành xem lịch theo tháng và chỉ đọc được những mục Em đã cho phép; nhật ký còn phụ thuộc quyền chia sẻ riêng của từng ngày.
 6. Đổi dữ liệu rồi bấm Làm mới ở góc người đồng hành để xem cập nhật. Bản thân dữ liệu của chủ tài khoản được đồng bộ tự động khi tab đang mở.
 7. Có thể ngắt kết nối từ một trong hai phía.
 
 Ở localhost, hai tài khoản có thể thử bằng trình duyệt thường và cửa sổ riêng tư. Để QR mở trên điện thoại khác, cần deploy lên domain HTTPS truy cập được từ thiết bị đó; QR chứa localhost sẽ chỉ trỏ đến chính thiết bị quét.
+
+Giao diện Anh có ba mục ngang hàng: **Người đồng hành** quản lý kết nối hiện tại; **Chu kỳ và lịch** đưa tóm tắt chu kỳ lên trên, dùng mũi tên để chuyển tháng và bấm tháng/năm để chuyển nhanh; **Em chia sẻ** hiện cảm xúc, triệu chứng và nhật ký của ngày đã chọn. Ngày có nội dung được chia sẻ có chấm ở phía trên; bấm ngày sẽ mở mục **Em chia sẻ**, và **Quay lại lịch** giữ tháng đang xem. Chấm chỉ phản ánh dữ liệu Anh được phép đọc, không đánh dấu ghi chú riêng tư. Khi Em không chia sẻ chu kỳ nhưng có chia sẻ nội dung khác, Anh vẫn có lịch chọn ngày, không có màu hay số liệu chu kỳ.
+
+### Lời nhắn cho Em và ngày bên nhau
+
+Mục **Người đồng hành** chỉ giữ **Lời nhắn cho Em**: Anh viết và lưu lời nhắn, Em chỉ đọc. Không có hồ sơ chia sẻ, kế hoạch chung hay lời nhắn ngược từ Em.
+
+Cả hai có thể đặt **Ngày bắt đầu bên nhau** trong **Cài đặt** (thanh bên ở desktop, nút bánh răng ở góc trên trên điện thoại). Khi đã chọn ngày, một ô nhỏ cạnh tiêu đề lời nhắn đếm số ngày tính cả ngày đầu; ngày tương lai hiển thị đếm ngược. Để trống và lưu để ẩn ô này ở cả hai tài khoản; không tự lấy ngày kết nối làm ngày bên nhau.
+
+Bấm **Lưu lời nhắn** ở tài khoản Anh để gửi thay đổi. Cần có mạng để đọc/lưu và không lưu offline. Lời nhắn tự cập nhật mỗi 15 giây khi đang xem; bản nháp được giữ khi có xung đột. Ngắt kết nối xóa lời nhắn và ngày bên nhau của cặp này, không xóa nhật ký cá nhân. Biểu tượng **Em chia sẻ** dùng chung biểu tượng **Nhật ký** của Em.
 
 ### Ghi nhận kỳ kinh bằng nút bấm
 
@@ -127,7 +137,9 @@ Nếu ngày kết thúc dự kiến đúng hôm nay, kỳ kinh vẫn mở để 
 
 ## 5. Đọc code ở đâu?
 
-Tab **Phân tích** tập trung các chỉ số trung bình, ngày kỳ tiếp theo dự kiến, nhận xét, báo cáo lịch sử và biểu đồ. Báo cáo lịch sử được mở sẵn, gồm số liệu nổi bật, thay đổi gần đây, triệu chứng được ghi nhận nhiều nhất và dữ liệu còn thiếu. **Lịch chu kỳ** dành cho ghi nhận kỳ kinh, triệu chứng và nhật ký; checkbox **Chia sẻ nhật ký** nằm bên phải tiêu đề **Lắng nghe cơ thể** và được lưu khi bấm **Lưu ghi chú**. Báo cáo thống kê tối đa 6 khoảng chu kỳ và 6 kỳ hành kinh đã xác nhận gần nhất; không dùng mặc định 28/5 hoặc ngày kết thúc ước tính làm dữ liệu thực tế. Nhật ký được tổng hợp từ ngày bắt đầu đầu tiên trong tối đa 7 lần bắt đầu gần nhất đến hôm nay, đếm mỗi triệu chứng tối đa một lần mỗi ngày. Báo cáo hoạt động offline, không gửi nhật ký sang dịch vụ AI bên ngoài và không chẩn đoán sức khỏe.
+Tab **Phân tích** có bộ lọc **3 tháng, 6 tháng, 1 năm, 2 năm, Toàn bộ** (mặc định 3 tháng), áp dụng cho số liệu, nhận xét, nhật ký và biểu đồ. Ngày đầu được tính lùi đúng số tháng từ hôm nay, điều chỉnh về ngày cuối tháng nếu cần; cả hai đầu được tính. Khoảng chu kỳ và kỳ hành kinh chỉ tính khi toàn bộ khoảng nằm trong thời gian chọn. Nhật ký được đếm độc lập với kỳ kinh, mỗi triệu chứng tối đa một lần mỗi ngày; ngày tương lai hoặc ngày trống không được tính. Báo cáo không giới hạn 6 mẫu trong khoảng chọn và không dùng mặc định 28/5 hoặc ngày kết thúc ước tính làm dữ liệu thực tế. Dự đoán kỳ tiếp theo vẫn dựa trên tối đa 6 mẫu gần nhất, không đổi theo bộ lọc. Biểu đồ cuộn ngang khi có nhiều mẫu. Báo cáo hoạt động offline, không gửi nhật ký sang dịch vụ AI bên ngoài và không chẩn đoán sức khỏe.
+
+Trong **Lịch chu kỳ**, nút ghi nhận/kết thúc và chỉnh sửa kỳ kinh nằm ngay dưới chú thích lịch, phía trên dòng **Nhấn giữ và kéo để ghi nhận khoảng ngày kinh của Em**. Checkbox **Chia sẻ nhật ký** vẫn nằm bên phải tiêu đề **Lắng nghe cơ thể**, được lưu khi bấm **Lưu ghi chú**.
 
 ```text
 public/                     Frontend được phục vụ cho trình duyệt

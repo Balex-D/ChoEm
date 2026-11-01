@@ -1605,7 +1605,6 @@ button:disabled {
   padding: 20px 0;
 }
 .companion-mode .little-note,
-.companion-mode #settings,
 .companion-mode .tagline,
 .companion-mode .nav-label,
 .companion-mode footer {
@@ -1614,9 +1613,162 @@ button:disabled {
 .companion-mode #nav {
   margin-top: 30px;
 }
+.companion-peer-nav {
+  display: contents;
+}
+.partner-message {
+  margin-top: 24px;
+}
+.partner-message-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.partner-message-heading h2 {
+  margin: 0;
+  font-size: 23px;
+}
+.partner-message-card {
+  padding: 22px;
+}
+.partner-message-card textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+}
+.partner-message-text {
+  margin: 0 0 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.8;
+}
+.partner-message-actions,
+.relationship-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.partner-message-status,
+.relationship-settings-status {
+  font-size: 12px;
+  line-height: 1.8;
+}
+.partner-message-status.error {
+  color: #9d3456;
+}
+.relationship-counter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f5eaf0;
+  border: 1px solid #dfc6d0;
+  border-radius: 14px;
+}
+.relationship-counter b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.relationship-counter span {
+  font-size: 11px;
+}
+.relationship-settings {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px dashed #d7c9c2;
+}
+.relationship-settings h3 {
+  margin-top: 0;
+}
+.relationship-settings p {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.header-settings {
+  display: none;
+}
+@media (max-width: 760px) {
+  .header-settings {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1.5px solid var(--ink);
+    border-radius: 50%;
+    background: transparent;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .partner-message-heading h2 {
+    font-size: 20px;
+  }
+  .partner-message-card {
+    padding: 18px;
+  }
+}
 .shared-calendar {
   margin-top: 20px;
   padding: 16px 0;
+}
+.shared-cycle-overview {
+  margin: 18px 0 24px;
+}
+.shared-cycle-status {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.shared-calendar .calendar-heading h3 {
+  margin: 0;
+}
+.day.has-shared-content::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: auto;
+  left: calc(50% - 2.5px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink);
+  pointer-events: none;
+}
+.shared-calendar .day.today:not(.has-shared-content)::after {
+  content: none;
+}
+.shared-day-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.companion-root .shared-day-heading h3 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.shared-day-heading p {
+  margin: 0;
+  font-size: 12px;
+}
+.shared-day-note {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .companion-root .connect-grid > .card {
+    padding: 18px;
+  }
+  .shared-calendar .calendar-heading {
+    gap: 8px;
+  }
+  .shared-calendar .calendar-heading h3 {
+    font-size: 16px;
+  }
 }
 .shared-calendar .day {
   font-size: 13px;
@@ -1773,6 +1925,29 @@ button:disabled {
   margin: 20px 0;
   padding: 24px;
 }
+.analysis-range {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 220px);
+  align-items: center;
+  gap: 12px 18px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.analysis-range label {
+  font-size: 14px;
+  font-weight: 800;
+}
+.analysis-range select {
+  margin: 0;
+  min-width: 0;
+}
+.analysis-range p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
 .history-analysis-heading {
   display: flex;
   align-items: center;
@@ -1842,6 +2017,16 @@ button:disabled {
   width: 100%;
   height: auto;
   color: var(--ink);
+}
+.analysis-chart-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.analysis-chart-scroll svg {
+  width: auto;
+  min-width: 100%;
+  height: 220px;
+  display: block;
 }
 .analysis-chart svg text {
   font-size: 12px;

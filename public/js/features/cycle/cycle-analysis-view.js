@@ -18,28 +18,34 @@ export function renderCycleOverview(a) {
     )
     .join("")}</div>`;
 }
-export function renderCycleNotices(a) {
+export function renderCycleNotices(a, { rangeScoped = false } = {}) {
   const messages = [a.cycleNotice, a.periodNotice, a.timingNotice].filter(
     Boolean,
   );
   if (a.cycles?.length === 0 || a.completed?.length === 0)
     messages.unshift(
-      "Khi chưa đủ lịch sử thực tế, ứng dụng dùng chu kỳ 28 ngày và thời gian hành kinh 5 ngày làm mặc định cho chỉ số còn thiếu.",
+      rangeScoped
+        ? "Khoảng đang xem chưa đủ mẫu để tính cả hai chỉ số trung bình. Dự đoán kỳ tiếp theo vẫn dùng lịch sử gần nhất; chỉ dùng mặc định khi thiếu dữ liệu thực tế."
+        : "Khi chưa đủ lịch sử thực tế, ứng dụng dùng chu kỳ 28 ngày và thời gian hành kinh 5 ngày làm mặc định cho chỉ số còn thiếu.",
     );
   return messages.length
     ? `<div class="cycle-analysis-notices">${messages.map((message) => `<p>${message}</p>`).join("")}</div>`
     : "";
 }
-export function renderCycleCharts(a) {
+export function renderCycleCharts(a, { rangeLabel } = {}) {
   const chart = (title, rows, average) => {
     if (!rows.length)
       return `<section class="card analysis-chart"><h3>${title}</h3><p>Chưa đủ dữ liệu. Em tiếp tục ghi nhận những kỳ kinh thực tế nhé.</p></section>`;
     const maximum =
       Math.max(...rows.map((row) => row.value), average || 0) * 1.2;
+    const chartWidth = Math.max(400, rows.length * 54 + 100);
     const plotHeight = 140,
-      width = 300 / rows.length;
+      width = (chartWidth - 100) / rows.length;
+    const caption = rangeLabel
+      ? `${rows.length} mẫu trong khoảng ${rangeLabel.toLowerCase()} · Ngày bắt đầu trên trục ngang. Kéo ngang để xem thêm.`
+      : "Tối đa 6 mẫu gần nhất · Ngày bắt đầu trên trục ngang.";
     const averageY = 165 - (average / maximum) * plotHeight;
-    return `<section class="card analysis-chart"><h3>${title}</h3><svg viewBox="0 0 400 220" role="img" aria-label="${title}, đơn vị ngày"><line x1="45" y1="25" x2="45" y2="165" stroke="currentColor"/><line x1="45" y1="165" x2="365" y2="165" stroke="currentColor"/><text x="4" y="18">Số ngày</text><text x="21" y="169">0</text><text x="12" y="37">${Math.ceil(maximum)}</text>${rows
+    return `<section class="card analysis-chart"><h3>${title}</h3><div class="analysis-chart-scroll"><svg viewBox="0 0 ${chartWidth} 220" width="${chartWidth}" role="img" aria-label="${title}, đơn vị ngày"><line x1="45" y1="25" x2="45" y2="165" stroke="currentColor"/><line x1="45" y1="165" x2="${chartWidth - 35}" y2="165" stroke="currentColor"/><text x="4" y="18">Số ngày</text><text x="21" y="169">0</text><text x="12" y="37">${Math.ceil(maximum)}</text>${rows
       .map((row, i) => {
         const height = (row.value / maximum) * plotHeight;
         const x = 55 + i * width;
@@ -47,7 +53,7 @@ export function renderCycleCharts(a) {
       })
       .join(
         "",
-      )}${average !== null ? `<line x1="45" y1="${averageY}" x2="365" y2="${averageY}" stroke="#795789" stroke-dasharray="5 4"/><text x="45" y="213">Trung bình: ${average} ngày</text>` : ""}</svg><p>Tối đa 6 ${title === "Độ dài chu kỳ" ? "khoảng chu kỳ" : "kỳ đã hoàn tất"} gần nhất · Ngày bắt đầu trên trục ngang.</p></section>`;
+      )}${average !== null ? `<line x1="45" y1="${averageY}" x2="${chartWidth - 35}" y2="${averageY}" stroke="#795789" stroke-dasharray="5 4"/><text x="45" y="213">Trung bình: ${average} ngày</text>` : ""}</svg></div><p>${caption}</p></section>`;
   };
   return `<div class="cycle-analysis-charts">${chart("Độ dài chu kỳ", a.cycles, a.averageCycleLength)}${chart("Số ngày hành kinh", a.completed, a.averagePeriodLength)}</div>`;
 }

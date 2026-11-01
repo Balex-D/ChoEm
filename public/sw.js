@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v17-analysis-tab";
+const CACHE = "cho-em-v22-partner-message";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./manifest.json",
   "./icon.svg",
   "/js/core/api.js",
+  "/js/core/icons.js",
   "/js/core/cloud.js",
   "/js/features/account/account.js",
   "/js/features/connections/connections.js",
@@ -25,6 +26,9 @@ const ASSETS = [
   "/js/features/connections/invite-dialog.js",
   "/js/features/connections/shared-view.js",
   "/js/features/connections/shared-details.js",
+  "/js/features/connections/companion-dashboard.js",
+  "/js/features/connections/partner-message.js",
+  "/js/features/connections/relationship-settings.js",
   "/shared/cycle/cycle-model.js",
   "/shared/cycle/cycle-analysis.js",
   "/shared/cycle/history-analysis.js",

@@ -24,6 +24,8 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 | PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,symptoms,notes},hideExistingJournals?}`; trả state và revision mới; tùy chọn ẩn nhật ký cũ chỉ dùng khi `notes=false` |
 | PATCH | `/state/entries/:date/sharing` | `{revision,shared}`; ẩn/hiện từng nhật ký của chính tài khoản, xác nhận từ server |
 | GET | `/connections` | Danh sách kết nối của chính tài khoản, tên đối phương và vai trò |
+| GET | `/connections/:id/space` | Trả `{space:{anniversary,message},revision,role}` cho thành viên của kết nối |
+| PATCH | `/connections/:id/space` | `{revision,anniversary?,message?}`; cả hai sửa ngày bên nhau, chỉ Anh sửa lời nhắn cho Em |
 | POST | `/connections/invites` | Chỉ Em chưa liên kết; trả `{code,token,url,qr,expiresAt}`; mã 6 ký tự A–Z/0–9 dùng một lần, hạn 2 phút; không trả UUID Em; `token` là alias của `code` |
 | DELETE | `/connections/invites` | Hủy lời mời đang chờ |
 | POST | `/connections/accept` | Chỉ Anh; `{ownerId,code}` từ QR, `{code}` cho mã 6 ký tự thủ công hoặc `{token}` cho client cũ; trả `{id}` khi liên kết thành công |
@@ -87,6 +89,14 @@ Frontend giữ bản offline, dừng tự thử khi xung đột và cho chọn b
 Đây là đồng bộ theo snapshot, phù hợp ứng dụng cá nhân với quy mô bản ghi nhỏ. Khi dữ liệu lớn hoặc cần nhiều người sửa liên tục, có thể thay repository bằng upsert theo bản ghi và giao thức delta, giữ nguyên các module UI.
 
 ## Quyền riêng tư
+
+Lời nhắn và ngày bên nhau lưu riêng trong `connection_spaces`, không nằm trong snapshot nhật ký. Cả hai được sửa `anniversary` (ngày hợp lệ hoặc `null`), thông qua Cài đặt. Chỉ người đồng hành (Anh) được sửa `message` tối đa 1000 ký tự; Em gửi trường này sẽ nhận 403 `COMPANION_ONLY`. Response chỉ có `anniversary` và lời nhắn từ Anh; các trường hồ sơ, kế hoạch và lời nhắn cũ từ Em không còn được trả về. PATCH từ chối `profile`, `plans` và đối tượng `messages`. Migration cũ được giữ nguyên để tương thích lịch sử database; các cột cũ không được sử dụng trong giao diện/API mới.
+
+Server kiểm tra thành viên và khóa hàng kết nối trong giao dịch; cùng revision chỉ một bản cập nhật thành công, bản sau nhận 409 `SPACE_CONFLICT`. Người ngoài hoặc kết nối đã ngắt nhận 404. Response luôn `no-store`; frontend không lưu góc chung vào IndexedDB/Cache Storage. Ngắt kết nối xóa dữ liệu góc chung qua khóa ngoại `ON DELETE CASCADE`. Dữ liệu nhật ký và cờ chia sẻ sức khỏe vẫn độc lập.
+
+Endpoint `GET /connections/:id/shared?month=YYYY-MM` lọc độc lập lịch chu kỳ, cảm xúc, triệu chứng và nhật ký theo quyền trước khi gửi. Khi được chia sẻ chu kỳ, response có thêm `cycle: {day,inPeriod,periodLength,estimatedEnd}` (hoặc `null` nếu chưa có ngày bắt đầu). `periodLength` là số ngày của kỳ gần nhất nếu đã có ngày kết thúc; `estimatedEnd` cho biết kết thúc được tự đặt theo trung bình. Các số liệu này mô tả trạng thái hiện tại, còn `calendar` và nhật ký thuộc tháng yêu cầu. Khi quyền chu kỳ tắt, không trả `cycle`, `analysis` hay `calendar`.
+
+Frontend đánh dấu chấm và mở tab nội dung theo ngày từ các trường đã được server cho phép. Không thêm API trả ngày có nội dung riêng tư. Nhật ký chỉ hiển thị đúng ngày được chọn; các bản ghi tương lai không được gửi. Tháng/năm hiện ở tiêu đề lịch, không dùng ô nhập ngày để điều hướng. Chuyển tháng loại bản dữ liệu cũ trong lúc tải và bỏ qua response đến muộn; việc làm mới giữ tab/ngày đang xem. Dữ liệu người đồng hành không lưu offline.
 
 `summary` xây dựng response theo danh sách cho phép ở server. Khi `notes=false`, cả `note` lẫn `symptoms` không có trong JSON; `mood=false` loại mood; `cycle=false` loại cycle. Không chỉ ẩn bằng CSS. Người đồng hành không được gọi `/state` để xem dữ liệu của người khác và không được yêu cầu lịch sử ngày khác.
 

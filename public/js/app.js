@@ -17,20 +17,21 @@ import {
   periodDayCount,
 } from "/shared/cycle/period-records.js";
 import { Cloud } from "./core/cloud.js";
+import { CALENDAR_PATH, JOURNAL_PATH } from "./core/icons.js";
+import { appendRelationshipSettings } from "./features/connections/relationship-settings.js";
 import { accountDialog } from "./features/account/account.js";
 import { renderConnections } from "./features/connections/connections.js";
 let cloud;
 let periodDragCleanup = null;
 let periodSaving = false;
+let analysisRange = "3m";
 let pendingInvite = location.hash.startsWith("#invite=") ? location.href : "";
 if (pendingInvite) history.replaceState(null, "", location.pathname);
 const $ = (s) => document.querySelector(s);
 const paths = {
   home: '<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
-  calendar:
-    '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-13 4h1m3 0h1m3 0h1m-9 3h1m3 0h1"/>',
-  journal:
-    '<path d="M4 4h12a3 3 0 0 1 3 3v14H7a3 3 0 0 1-3-3Zm0 13h15M8 8h7m-7 4h5"/>',
+  calendar: CALENDAR_PATH,
+  journal: JOURNAL_PATH,
   analysis: '<path d="M4 3v17h17M8 16v-5m5 5V7m5 9v-9"/>',
   heart:
     '<path d="M20.8 5.6a5.5 5.5 0 0 0-8.8 1 5.5 5.5 0 0 0-8.8-1C-1 11 8 18 12 21c4-3 13-10 8.8-15.4Z"/>',
@@ -160,6 +161,7 @@ async function init() {
       canRefresh: () =>
         !$("#dialog").open &&
         !$("#main").classList.contains("period-dragging") &&
+        !document.querySelector('[data-space-dirty="true"]') &&
         !hasUnsavedDraft(),
     });
     render();
@@ -317,8 +319,7 @@ function bindCalendar({ keepDrag = false } = {}) {
   if (!$(".period-drag-help")) {
     const help = document.createElement("p");
     help.className = "period-drag-help";
-    help.textContent =
-      "Nhấn giữ và kéo để ghi nhận khoảng ngày. Giữ sát mép lịch để chuyển tháng. Kéo từ ngày đã ghi để sửa ngày kết thúc.";
+    help.textContent = "Nhấn giữ và kéo để ghi nhận khoảng ngày kinh của Em.";
     $(".calendar-card").append(help);
   }
   const heading = $(".calendar-heading h3");
@@ -396,6 +397,7 @@ function bindCalendar({ keepDrag = false } = {}) {
         const wide = card.classList.contains("wide-calendar");
         card.outerHTML = calendar(wide);
         bindCalendar({ keepDrag: true });
+        if (view === "calendar") renderPeriodControls();
         const end = new Date(month.getFullYear(), month.getMonth() + 1, 0, 12);
         return direction > 0
           ? key(month)
@@ -415,7 +417,15 @@ function render() {
   if (view === "home") renderHome();
   if (view === "calendar") renderCalendar();
   if (view === "analysis")
-    renderAnalysisPage({ main: $("#main"), state, today: todayKey });
+    renderAnalysisPage({
+      main: $("#main"),
+      state,
+      today: todayKey,
+      range: analysisRange,
+      onRangeChange: (range) => {
+        analysisRange = range;
+      },
+    });
   if (view === "journal") renderJournal();
   if (view === "connect") renderConnect();
 }
@@ -678,7 +688,7 @@ function renderPeriodControls() {
   if (estimated)
     panel.querySelector("p").textContent =
       `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
-  $(".day-details > b").after(panel);
+  $(".wide-calendar .calendar-legend").after(panel);
   panel.querySelector("#selected-period-action").onclick = async (event) => {
     event.target.disabled = true;
     await handlePeriodAction(selected);
@@ -842,23 +852,30 @@ function renderConnect() {
   });
 }
 function settingsDialog() {
-  if (cloud?.user?.role === "anh") return openAccount();
+  const isAnh = cloud?.user?.role === "anh";
   openDialog(
-    `<h2>Tên gọi thân thương</h2><label class="form-label" for="name">Mình gọi em là</label><input id="name" maxlength="24" required value="${escape(state.name)}"><button class="primary" id="save-settings">Lưu tên gọi</button>`,
+    `<h2>Cài đặt</h2>${isAnh ? "" : `<label class="form-label" for="name">Mình gọi em là</label><input id="name" maxlength="24" required value="${escape(state.name)}"><button class="primary" id="save-settings">Lưu tên gọi</button>`}`,
   );
+  void appendRelationshipSettings({
+    container: $("#dialog-body"),
+    cloud,
+    escape,
+    toast,
+  });
+  if (isAnh) return;
   $("#save-settings").onclick = async () => {
     const name = $("#name").value.trim();
     if (!name || name.length > 24)
       return toast("Em nhập tên từ 1 đến 24 ký tự nhé.");
     state.name = name;
     if (await persist()) {
-      $("#dialog").close();
       render();
       toast("Đã lưu tên gọi của Em.");
     }
   };
 }
 $("#settings").onclick = settingsDialog;
+$("#mobile-settings").onclick = settingsDialog;
 $("#profile").onclick = openAccount;
 document.querySelector(".brand").onclick = (e) => {
   e.preventDefault();

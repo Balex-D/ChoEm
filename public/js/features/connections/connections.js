@@ -1,6 +1,7 @@
 import { api } from "../../core/api.js";
 import { invitationDialog } from "./invite-dialog.js";
-import { renderSharedDetails } from "./shared-details.js";
+import { mountCompanionDashboard } from "./companion-dashboard.js";
+import { mountPartnerMessage } from "./partner-message.js";
 import { parseConnectionCode } from "./connection-code.js";
 import { scanConnectionQR } from "./qr-scanner.js";
 export async function renderConnections({
@@ -168,7 +169,7 @@ export async function renderConnections({
     });
     bind("[data-unlink]", async (b) => {
       open(
-        '<h2>Ngắt kết nối?</h2><p>Người đồng hành sẽ không truy cập được dữ liệu mới từ máy chủ. Thông tin họ đã đọc hoặc tự lưu trước đó không thể thu hồi.</p><button class="primary" id="confirm-unlink">Ngắt kết nối</button><p id="unlink-error" role="alert"></p>',
+        '<h2>Ngắt kết nối?</h2><p>Người đồng hành sẽ không truy cập được dữ liệu mới từ máy chủ. Lời nhắn cho Em và ngày bên nhau của kết nối này sẽ được xóa; nhật ký cá nhân vẫn được giữ. Thông tin người ấy đã đọc hoặc tự lưu trước đó không thể thu hồi.</p><button class="primary" id="confirm-unlink">Ngắt kết nối</button><p id="unlink-error" role="alert"></p>',
       );
       document.querySelector("#confirm-unlink").onclick = async () => {
         try {
@@ -217,108 +218,34 @@ export async function renderConnections({
         };
       }
     });
+    const linked = isAnh ? incoming : owned;
+    let partnerMessage = null;
+    if (linked) {
+      partnerMessage = document.createElement("section");
+      partnerMessage.className = "partner-message";
+      partnerMessage.id = "partner-message-section";
+      root.append(partnerMessage);
+      await mountPartnerMessage({
+        element: partnerMessage,
+        main,
+        connectionId: linked.id,
+        escape,
+        toast,
+      });
+      if (!root.isConnected) return;
+    }
     if (incoming && isAnh) {
-      let summaryRequest = 0;
-      let selected = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Ho_Chi_Minh",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-      let selectedMonth = selected.slice(0, 7);
-      let sharedData = null;
-      root.addEventListener("change", (event) => {
-        if (
-          event.target.id === "shared-month" &&
-          event.target.validity.valid &&
-          /^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)
-        ) {
-          selectedMonth = event.target.value;
-          selected = selectedMonth + "-01";
-          void summary();
-        }
-        if (
-          event.target.id === "shared-date-picker" &&
-          event.target.validity.valid &&
-          event.target.value.startsWith(selectedMonth + "-")
-        ) {
-          selected = event.target.value;
-          if (sharedData)
-            root.querySelector("#shared-summary").innerHTML =
-              renderSharedDetails(sharedData, selected, escape);
-        }
+      await mountCompanionDashboard({
+        root,
+        main,
+        connectionId: incoming.id,
+        escape,
+        open,
+        close,
+        reload,
+        showError,
+        overviewElement: partnerMessage,
       });
-      root.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-shared-day]");
-        if (button && sharedData) {
-          selected = button.dataset.sharedDay;
-          root.querySelector("#shared-summary").innerHTML = renderSharedDetails(
-            sharedData,
-            selected,
-            escape,
-          );
-        }
-      });
-      const summary = async () => {
-        const request = ++summaryRequest;
-        const date = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Ho_Chi_Minh",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }).format(new Date());
-        try {
-          const { shared: s } = await api(
-            "/connections/" + incoming.id + "/shared?month=" + selectedMonth,
-          );
-          if (
-            !root.isConnected ||
-            request !== summaryRequest ||
-            document.hidden
-          )
-            return;
-          sharedData = s;
-          root.querySelector("#shared-summary").innerHTML = renderSharedDetails(
-            s,
-            selected,
-            escape,
-          );
-          root.querySelector("#connection-error").textContent = "";
-        } catch (error) {
-          if (!root.isConnected || request !== summaryRequest) return;
-          root.querySelector("#shared-summary").replaceChildren();
-          sharedData = null;
-          if (error.status === 404) await reload();
-          else showError(error);
-        }
-      };
-      bind("#refresh-summary", summary);
-      let busy = false;
-      const refresh = async () => {
-        if (busy || !root.isConnected || document.hidden) return;
-        busy = true;
-        try {
-          await summary();
-        } finally {
-          busy = false;
-        }
-      };
-      const visible = () => {
-        if (document.hidden)
-          root.querySelector("#shared-summary")?.replaceChildren();
-        else void refresh();
-      };
-      const interval = setInterval(refresh, 15000);
-      const observer = new MutationObserver(() => {
-        if (!root.isConnected) {
-          clearInterval(interval);
-          observer.disconnect();
-          document.removeEventListener("visibilitychange", visible);
-        }
-      });
-      observer.observe(main, { childList: true });
-      document.addEventListener("visibilitychange", visible);
-      await summary();
     }
   } catch (e) {
     if (root.isConnected)

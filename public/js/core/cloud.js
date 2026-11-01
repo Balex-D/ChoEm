@@ -128,6 +128,7 @@ export class Cloud {
         if (
           seq === this.sequence &&
           !this.envelope.dirty &&
+          this.hooks.canRefresh() &&
           remote.revision !== this.envelope.revision
         ) {
           this.envelope = { ...remote, dirty: false };

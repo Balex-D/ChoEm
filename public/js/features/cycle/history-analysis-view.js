@@ -9,7 +9,11 @@ const escape = (value) =>
       ],
   );
 
-export function createHistoryAnalysis(state, today, { expanded = false } = {}) {
+export function createHistoryAnalysis(
+  state,
+  today,
+  { expanded = false, range = "3m" } = {},
+) {
   const section = document.createElement("section");
   section.className = "card history-analysis";
   section.innerHTML = `<div class="history-analysis-heading"><div><h2>Hiểu nhịp điệu của Em</h2><p>Nhìn lại những kỳ kinh và biểu hiện đã ghi nhận.</p></div><button class="small-button" type="button" aria-expanded="false" aria-controls="history-analysis-result">Phân tích lịch sử</button></div><div id="history-analysis-result" hidden></div>`;
@@ -18,10 +22,10 @@ export function createHistoryAnalysis(state, today, { expanded = false } = {}) {
   button.onclick = () => {
     const opening = result.hidden;
     if (opening) {
-      const report = analyzeHistory(state, today);
+      const report = analyzeHistory(state, today, range);
       const list = (title, items) =>
         `<div class="history-analysis-group"><h3>${title}</h3><ul>${items.map((item) => `<li>${escape(item)}</li>`).join("")}</ul></div>`;
-      result.innerHTML = `<p class="history-analysis-basis">Thống kê từ lịch sử đã ghi nhận · Tối đa 6 khoảng chu kỳ và 6 kỳ hành kinh đã xác nhận gần nhất.</p>${list("Số liệu nổi bật", report.highlights.length ? report.highlights : ["Chưa đủ dữ liệu thực tế để tổng hợp số ngày."])}${list("Thay đổi gần đây", report.changes)}${
+      result.innerHTML = `<p class="history-analysis-basis">Khoảng thống kê: ${escape(report.range.label)} · Chỉ dùng số ngày hành kinh đã xác nhận; nhật ký được tính độc lập với các kỳ kinh.</p>${list("Số liệu nổi bật", report.highlights.length ? report.highlights : ["Chưa đủ dữ liệu thực tế để tổng hợp số ngày."])}${list("Thay đổi gần đây", report.changes)}${
         report.symptoms.length
           ? list(
               "Biểu hiện được ghi nhận nhiều nhất",
