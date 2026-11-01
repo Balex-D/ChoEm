@@ -2,11 +2,7 @@ import {
   analyzeCycles,
   recordLocalForecast,
 } from "/shared/cycle/cycle-analysis.js";
-import {
-  renderCycleOverview,
-  renderCycleNotices,
-  renderCycleCharts,
-} from "./features/cycle/cycle-analysis-view.js";
+import { renderAnalysisPage } from "./features/cycle/analysis-page.js";
 import { cycleDayType } from "/shared/cycle/cycle-model.js";
 import { attachPeriodDrag } from "./features/cycle/period-drag.js";
 import {
@@ -35,6 +31,7 @@ const paths = {
     '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-13 4h1m3 0h1m3 0h1m-9 3h1m3 0h1"/>',
   journal:
     '<path d="M4 4h12a3 3 0 0 1 3 3v14H7a3 3 0 0 1-3-3Zm0 13h15M8 8h7m-7 4h5"/>',
+  analysis: '<path d="M4 3v17h17M8 16v-5m5 5V7m5 9v-9"/>',
   heart:
     '<path d="M20.8 5.6a5.5 5.5 0 0 0-8.8 1 5.5 5.5 0 0 0-8.8-1C-1 11 8 18 12 21c4-3 13-10 8.8-15.4Z"/>',
   lock: '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/>',
@@ -242,6 +239,7 @@ $("#dialog").onclick = (e) => {
 const tabs = [
   ["home", "Hôm nay", "home"],
   ["calendar", "Lịch chu kỳ", "calendar"],
+  ["analysis", "Phân tích", "analysis"],
   ["journal", "Nhật ký", "journal"],
   ["connect", "Người đồng hành", "heart"],
 ];
@@ -416,6 +414,8 @@ function render() {
   renderNav();
   if (view === "home") renderHome();
   if (view === "calendar") renderCalendar();
+  if (view === "analysis")
+    renderAnalysisPage({ main: $("#main"), state, today: todayKey });
   if (view === "journal") renderJournal();
   if (view === "connect") renderConnect();
 }
@@ -488,18 +488,6 @@ function renderCycleHero(c) {
   const displayDate = (day) =>
     day ? day.split("-").reverse().join("/") : "Chưa đủ dữ liệu";
   const data = [
-    [
-      "Chu kỳ trung bình",
-      a.averageCycleLength === null
-        ? "Chưa đủ dữ liệu"
-        : `${a.averageCycleLength} ngày`,
-    ],
-    [
-      "Hành kinh trung bình",
-      a.averagePeriodLength === null
-        ? "Chưa đủ dữ liệu"
-        : `${a.averagePeriodLength} ngày`,
-    ],
     ["Kỳ kinh gần nhất", displayDate(a.lastPeriodStart)],
     ["Kỳ tiếp theo dự kiến", displayDate(a.nextPeriodStart)],
   ];
@@ -540,18 +528,22 @@ function renderHome() {
   };
 }
 function renderCalendar() {
-  const c = cycleInfo(),
-    e = state.entries[selected] || {};
+  const e = state.entries[selected] || {};
   activeSymptoms = [...(e.symptoms || [])];
   const type = dayType(parse(selected));
   $("#main").innerHTML =
-    `<div class="page-intro"><div class="eyebrow">NHỊP ĐIỆU RIÊNG CỦA EM</div><h1>Lịch chu kỳ ${icon("flower")}</h1><p>Mỗi dấu nhỏ là một cách hiểu cơ thể hơn.</p></div>${renderCycleOverview(c.analysis)}${renderCycleNotices(c.analysis)}${calendar(true)}<section class="card day-details"><b>${parse(selected).toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</b>${type === "predicted" ? "<p>Ngày kinh dự kiến, chưa được ghi nhận.</p>" : type === "ovulation" ? "<p>Ngày rụng trứng ước tính từ lịch sử đã ghi nhận.</p>" : ""}<div class="note-card day-body-record"><h3 class="mini-title">${icon("pen")} Lắng nghe cơ thể</h3><div class="symptoms"></div><textarea id="note" aria-label="Ghi chú trạng thái cơ thể" rows="2" maxlength="2000">${escape(e.note || "")}</textarea><div class="note-bottom"><span>${cloud?.user ? ((e.shared ?? state.privacy.notes) ? "Ghi chú đang bật chia sẻ ♡" : "Ghi chú đang để riêng tư ♡") : "Chỉ lưu trên thiết bị này ♡"}</span><button class="small-button" id="save-note">Lưu ghi chú ↗</button></div></div></section><p class="privacy-note">Dự đoán chỉ mang tính tham khảo, không dùng làm biện pháp tránh thai.</p>`;
+    `<div class="page-intro"><div class="eyebrow">NHỊP ĐIỆU RIÊNG CỦA EM</div><h1>Lịch chu kỳ ${icon("flower")}</h1><p>Mỗi dấu nhỏ là một cách hiểu cơ thể hơn.</p></div>${calendar(true)}<section class="card day-details"><b>${parse(selected).toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</b>${type === "predicted" ? "<p>Ngày kinh dự kiến, chưa được ghi nhận.</p>" : type === "ovulation" ? "<p>Ngày rụng trứng ước tính từ lịch sử đã ghi nhận.</p>" : ""}<div class="note-card day-body-record"><h3 class="mini-title">${icon("pen")} Lắng nghe cơ thể</h3><div class="symptoms"></div><textarea id="note" aria-label="Ghi chú trạng thái cơ thể" rows="2" maxlength="2000">${escape(e.note || "")}</textarea><div class="note-bottom"><span>${cloud?.user ? ((e.shared ?? state.privacy.notes) ? "Ghi chú đang bật chia sẻ ♡" : "Ghi chú đang để riêng tư ♡") : "Chỉ lưu trên thiết bị này ♡"}</span><button class="small-button" id="save-note">Lưu ghi chú ↗</button></div></div></section><p class="privacy-note">Dự đoán chỉ mang tính tham khảo, không dùng làm biện pháp tránh thai.</p>`;
   bindCalendar();
   bindSymptoms();
   const sharing = document.createElement("label");
-  sharing.className = "save-symptom";
-  sharing.innerHTML = `<input type="checkbox" id="share-day-journal" ${(e.shared ?? state.privacy.notes) ? "checked" : ""}> Chia sẻ nhật ký này với Anh`;
-  $("#note").after(sharing);
+  sharing.className = "save-symptom journal-sharing-toggle";
+  sharing.title = "Chia sẻ nhật ký ngày này với Anh khi lưu ghi chú";
+  sharing.innerHTML = `<input type="checkbox" id="share-day-journal" ${(e.shared ?? state.privacy.notes) ? "checked" : ""}> Chia sẻ nhật ký`;
+  const bodyHeading = document.createElement("div");
+  bodyHeading.className = "day-body-heading";
+  const bodyTitle = $(".day-body-record .mini-title");
+  bodyTitle.before(bodyHeading);
+  bodyHeading.append(bodyTitle, sharing);
   const tools = document.createElement("div");
   tools.className = "period-tools";
   tools.innerHTML =
@@ -698,9 +690,6 @@ function renderPeriodControls() {
     panel.querySelector("#remove-selected-period").onclick = () =>
       confirmRemovePeriod(existing.start);
   }
-  const charts = document.createElement("div");
-  charts.innerHTML = renderCycleCharts(analyzeCycles(state, todayKey));
-  $(".day-details").after(charts);
 }
 function managePeriodsDialog() {
   openDialog(

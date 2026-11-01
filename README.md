@@ -127,6 +127,8 @@ Nếu ngày kết thúc dự kiến đúng hôm nay, kỳ kinh vẫn mở để 
 
 ## 5. Đọc code ở đâu?
 
+Tab **Phân tích** tập trung các chỉ số trung bình, ngày kỳ tiếp theo dự kiến, nhận xét, báo cáo lịch sử và biểu đồ. Báo cáo lịch sử được mở sẵn, gồm số liệu nổi bật, thay đổi gần đây, triệu chứng được ghi nhận nhiều nhất và dữ liệu còn thiếu. **Lịch chu kỳ** dành cho ghi nhận kỳ kinh, triệu chứng và nhật ký; checkbox **Chia sẻ nhật ký** nằm bên phải tiêu đề **Lắng nghe cơ thể** và được lưu khi bấm **Lưu ghi chú**. Báo cáo thống kê tối đa 6 khoảng chu kỳ và 6 kỳ hành kinh đã xác nhận gần nhất; không dùng mặc định 28/5 hoặc ngày kết thúc ước tính làm dữ liệu thực tế. Nhật ký được tổng hợp từ ngày bắt đầu đầu tiên trong tối đa 7 lần bắt đầu gần nhất đến hôm nay, đếm mỗi triệu chứng tối đa một lần mỗi ngày. Báo cáo hoạt động offline, không gửi nhật ký sang dịch vụ AI bên ngoài và không chẩn đoán sức khỏe.
+
 ```text
 public/                     Frontend được phục vụ cho trình duyệt
   index.html                Trang khởi đầu
@@ -156,6 +158,8 @@ docs/                       Tài liệu kiến trúc, API và triển khai
 | Màn hình tài khoản | `public/js/features/account/account.js` |
 | UI kết nối và chia sẻ | `public/js/features/connections/connections.js` |
 | Công thức chu kỳ và dự đoán | `shared/cycle/cycle-analysis.js` |
+| Thống kê và nhận xét lịch sử | `shared/cycle/history-analysis.js` |
+| Nút và giao diện Phân tích lịch sử | `public/js/features/cycle/history-analysis-view.js` |
 | Quy tắc ghi nhận và kết thúc kỳ kinh | `shared/cycle/period-records.js` |
 | Phân loại ngày trên lịch | `shared/cycle/cycle-model.js` |
 | Giao diện phân tích và kéo lịch | `public/js/features/cycle/` |

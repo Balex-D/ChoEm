@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v15-project-structure";
+const CACHE = "cho-em-v17-analysis-tab";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,6 +27,9 @@ const ASSETS = [
   "/js/features/connections/shared-details.js",
   "/shared/cycle/cycle-model.js",
   "/shared/cycle/cycle-analysis.js",
+  "/shared/cycle/history-analysis.js",
+  "/js/features/cycle/history-analysis-view.js",
+  "/js/features/cycle/analysis-page.js",
   "/js/features/cycle/cycle-analysis-view.js",
   "/shared/cycle/period-records.js",
   "/js/features/cycle/period-drag.js",
