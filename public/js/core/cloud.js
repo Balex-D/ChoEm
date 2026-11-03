@@ -123,7 +123,7 @@ export class Cloud {
         if (this.user?.id !== userId || this.suspended) return;
         this.envelope = { ...result, dirty: false };
         await this.storage.set("account:" + userId, this.envelope);
-        this.hooks.remote(clone(result.state));
+        this.hooks.remote(clone(result.state), { refresh: !this.quietRefresh });
         this.changed("Đã đồng bộ");
         return;
       }
@@ -138,6 +138,16 @@ export class Cloud {
         });
         if (this.user?.id !== userId) return;
         this.envelope.revision = saved.revision;
+        if (saved.intimacyPermissions) {
+          Object.assign(this.envelope.state.privacy, saved.intimacyPermissions);
+          const local = this.hooks.local?.();
+          if (local) Object.assign(local.privacy, saved.intimacyPermissions);
+        }
+        if (typeof saved.paused === "boolean") {
+          this.envelope.state.privacy.paused = saved.paused;
+          const local = this.hooks.local?.();
+          if (local) local.privacy.paused = saved.paused;
+        }
         if (Array.isArray(saved.forecasts)) {
           forecastsUpdated ||=
             JSON.stringify(this.envelope.state.forecasts || []) !==
@@ -164,12 +174,16 @@ export class Cloud {
         ) {
           this.envelope = { ...remote, dirty: false };
           await this.storage.set("account:" + userId, this.envelope);
-          this.hooks.remote(clone(remote.state));
+          this.hooks.remote(clone(remote.state), {
+            refresh: !this.quietRefresh,
+          });
         }
       }
       this.changed(this.envelope.dirty ? "Chờ đồng bộ" : "Đã đồng bộ");
       if (forecastsUpdated && this.hooks.canRefresh() && !this.envelope.dirty)
-        this.hooks.remote(clone(this.envelope.state));
+        this.hooks.remote(clone(this.envelope.state), {
+          refresh: !this.quietRefresh,
+        });
     } catch (e) {
       if (this.user?.id !== userId) return;
       if (e.code === "ACCOUNT_CHANGED") {
@@ -235,20 +249,47 @@ export class Cloud {
     this.hooks.remote(clone(restored));
     await this.sync();
   }
-  async changePrivacy(privacy, { hideExistingJournals = false } = {}) {
-    if (!this.user || !navigator.onLine)
+  async changePrivacy(
+    privacy,
+    { hideExistingJournals = false, refreshView = true } = {},
+  ) {
+    if (
+      !this.user ||
+      !this.envelope ||
+      this.suspended ||
+      this.expired ||
+      !navigator.onLine
+    )
       throw new Error("Cần đăng nhập và có mạng để thay đổi quyền chia sẻ.");
-    await this.sync();
-    if (this.conflict || this.envelope.dirty)
-      throw new Error("Hãy xử lý đồng bộ trước khi đổi quyền chia sẻ.");
-    const result = await api("/state/privacy", {
-      method: "PATCH",
-      body: { revision: this.envelope.revision, privacy, hideExistingJournals },
-    });
-    this.envelope = { ...result, dirty: false };
-    await this.storage.set("account:" + this.user.id, this.envelope);
-    this.hooks.remote(clone(result.state));
-    this.changed("Đã cập nhật quyền chia sẻ");
+    if (this.privacyBusy)
+      throw new Error("Đang lưu lựa chọn trước, Em đợi một chút nhé.");
+    this.privacyBusy = true;
+    this.quietRefresh = !refreshView;
+    const previousPrivacy = clone(this.envelope.state.privacy);
+    try {
+      await this.sync();
+      if (this.conflict || this.envelope.dirty)
+        throw new Error("Hãy xử lý đồng bộ trước khi đổi quyền chia sẻ.");
+      const nextPrivacy = { ...this.envelope.state.privacy };
+      for (const [key, value] of Object.entries(privacy))
+        if (previousPrivacy[key] !== value) nextPrivacy[key] = value;
+      if (hideExistingJournals) nextPrivacy.notes = false;
+      const result = await api("/state/privacy", {
+        method: "PATCH",
+        body: {
+          revision: this.envelope.revision,
+          privacy: nextPrivacy,
+          hideExistingJournals,
+        },
+      });
+      this.envelope = { ...result, dirty: false };
+      await this.storage.set("account:" + this.user.id, this.envelope);
+      this.hooks.remote(clone(result.state), { refresh: refreshView });
+      this.changed("Đã cập nhật quyền chia sẻ");
+    } finally {
+      this.quietRefresh = false;
+      this.privacyBusy = false;
+    }
   }
   async changeEntrySharing(date, shared) {
     if (!this.user || !navigator.onLine)
@@ -264,6 +305,48 @@ export class Cloud {
     await this.storage.set("account:" + this.user.id, this.envelope);
     this.hooks.remote(clone(result.state));
     this.changed("Đã cập nhật quyền nhật ký");
+  }
+  async changeIntimacy(date, recorded) {
+    if (
+      !this.user ||
+      !this.envelope ||
+      this.suspended ||
+      this.expired ||
+      !navigator.onLine
+    )
+      throw new Error("Cần đăng nhập và có mạng để cập nhật lịch.");
+    await this.sync();
+    if (this.conflict || this.envelope.dirty)
+      throw new Error("Hãy xử lý đồng bộ trước khi cập nhật lịch.");
+    const userId = this.user.id,
+      seq = this.sequence,
+      revision = this.envelope.revision;
+    this.busy = (async () => {
+      const result = await api("/state/intimacy/" + date, {
+        method: "PATCH",
+        body: { revision, recorded },
+      });
+      if (this.user?.id !== userId || this.suspended) return;
+      if (seq !== this.sequence) {
+        this.conflict = result;
+        this.changed(
+          "Có thay đổi đồng thời · mở Tài khoản để chọn bản giữ lại",
+        );
+        return;
+      }
+      this.envelope = { ...result, dirty: false };
+      await this.storage.set("account:" + userId, this.envelope);
+      if (this.hooks.canRefresh()) this.hooks.remote(clone(result.state));
+      else {
+        const local = this.hooks.local?.();
+        if (local)
+          local.intimacyDates = clone(result.state.intimacyDates || []);
+      }
+      this.changed("Đã cập nhật lịch riêng của Em");
+    })().finally(() => {
+      this.busy = null;
+    });
+    return this.busy;
   }
   exportData() {
     const payload = {

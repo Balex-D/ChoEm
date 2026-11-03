@@ -1,5 +1,7 @@
 # Cho Em — Full-stack PWA
 
+**Tính năng mới:** Ghi lại một ngày của Em, hoàn tác trong một phút, xem trước dữ liệu Anh được thấy, tạm dừng chia sẻ, nhu cầu hôm nay (có ô tự viết riêng) và ghi ngày quan hệ với quyền xem/sửa do Em cấp. Cần migration đến 010; xem [hướng dẫn sử dụng](docs/DAILY_FEATURES.md).
+
 Bổ sung backend vào đúng bản `Cho-Em-main.zip` đã chỉnh sửa. Giữ phong cách doodle, assets, vị trí phần Lắng nghe cơ thể trong lịch và dấu ghi chú trên từng ngày.
 
 **Bắt đầu dễ nhất:** đọc phần 2 để chạy cả app và database bằng Docker. Deploy thật qua domain HTTPS: xem [docs/DEPLOY.md](docs/DEPLOY.md).
@@ -64,6 +66,10 @@ npm run dev
 Mở http://localhost:8080. `npm run dev` tự khởi động lại khi code server thay đổi; sửa HTML/CSS/JS frontend rồi refresh trình duyệt. Không dùng VS Code Live Server để chạy bản full-stack vì Live Server không phục vụ API.
 
 Nếu PostgreSQL đã cài riêng, bỏ qua bước `docker compose up -d db`, tạo database rồi sửa `DATABASE_URL` trong `.env`.
+
+Database Docker local được mở tại `localhost:55432` để tránh trùng PostgreSQL cài trên Windows ở cổng 5432. Với `.env` cũ, đặt `POSTGRES_PORT=55432` và đổi phần cổng của `DATABASE_URL` thành `55432`, rồi chạy `docker compose up -d db`. Không đổi mật khẩu hoặc xóa volume để xử lý trường hợp kết nối nhầm database.
+
+Nếu trước đó chạy toàn bộ app bằng Docker, dùng `docker compose stop app` trước `npm run dev` hoặc `npm start` để giải phóng cổng 8080. Chọn chạy app bằng Node hoặc Docker tại một thời điểm.
 
 Lệnh kiểm tra và chạy bản build:
 

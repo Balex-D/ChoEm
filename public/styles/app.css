@@ -8,6 +8,56 @@
   --line: 2.5px solid var(--ink);
   --shadow: 4px 4px 0 var(--ink);
 }
+.daily-actions, .preview-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 24px;
+}
+.checkin-options {
+  border: 1.5px solid #c7bfb4;
+  border-radius: 12px;
+  margin: 18px 0;
+  padding: 12px;
+}
+.checkin-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+}
+.checkin-options input, #quick-checkin input[type="checkbox"] {
+  width: auto;
+  flex: 0 0 auto;
+}
+.checkin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.journal-checkin-details { color: var(--muted); line-height: 1.6; }
+.sharing-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.calendar-record-actions { display: flex; gap: 12px; align-items: stretch; }
+.period-action-panel .calendar-record-actions > button { flex: 1; min-width: 0; }
+.today-needs { background: var(--purple); border-radius: 12px; padding: 16px; }
+.needs-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+#today-needs-form .checkin-options { margin-left: 0; margin-right: 0; min-width: 0; width: 100%; }
+#needs-text { display: block; box-sizing: border-box; width: 100%; max-width: 100%; resize: vertical; }
+.intimacy-marker { color: #9b4667; font-size: 10px; line-height: 1; }
+.day .intimacy-marker { position: absolute; bottom: 3px; left: 4px; }
+.intimacy-controls { margin: 16px 0; padding: 14px; border: 1.5px solid #c7bfb4; border-radius: 12px; }
+#undo-banner {
+  position: fixed;
+  z-index: 40;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 24px));
+  padding: 14px 16px;
+  border: var(--line);
+  border-radius: 14px;
+  background: #fcfaf5;
+  box-shadow: var(--shadow);
+}
+#undo-banner button { margin-left: 10px; }
+#undo-banner p:empty { display: none; }
+#sharing-preview .days { min-width: 0; }
 * {
   box-sizing: border-box;
 }

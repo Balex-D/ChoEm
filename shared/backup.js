@@ -1,4 +1,5 @@
 import { vietnamDay } from "./dates.js";
+import { checkinEntry } from "./checkin.js";
 const moods = new Set([
   "",
   "Vui vẻ",
@@ -54,6 +55,14 @@ export function parseBackup(text, today = vietnamDay()) {
   const starts = [...s.starts].sort(),
     ends = {},
     estimates = s.periodEstimates ?? {};
+  if (
+    s.intimacyDates !== undefined &&
+    (!Array.isArray(s.intimacyDates) ||
+      s.intimacyDates.length > 10000 ||
+      new Set(s.intimacyDates).size !== s.intimacyDates.length ||
+      !s.intimacyDates.every((date) => day(date) && date <= today))
+  )
+    fail();
   if (!object(estimates) || Object.keys(estimates).length > 1000) fail();
   for (const [start, duration] of Object.entries(estimates)) {
     if (
@@ -96,18 +105,13 @@ export function parseBackup(text, today = vietnamDay()) {
         !strings(e.symptoms ?? [], 50) ||
         typeof (e.note ?? "") !== "string" ||
         (e.note ?? "").length > 2000 ||
-        (e.shared !== undefined && typeof e.shared !== "boolean")
+        (e.shared !== undefined && typeof e.shared !== "boolean") ||
+        (e.needsShared !== undefined && typeof e.needsShared !== "boolean") ||
+        (e.needsText !== undefined && typeof e.needsText !== "string") ||
+        (e.pain != null && typeof e.pain !== "number")
       )
         fail();
-      return [
-        date,
-        {
-          mood: e.mood ?? "",
-          symptoms: (e.symptoms ?? []).map((x) => x.trim()),
-          note: e.note ?? "",
-          shared: false,
-        },
-      ];
+      return [date, checkinEntry({ ...e, shared: false, needsShared: false })];
     }),
   );
   if (
@@ -122,6 +126,9 @@ export function parseBackup(text, today = vietnamDay()) {
       name: s.name.trim(),
       starts,
       ends,
+      ...(s.intimacyDates === undefined
+        ? {}
+        : { intimacyDates: [...s.intimacyDates].sort() }),
       periodEstimates: { ...estimates },
       entries,
       symptomSuggestions: s.symptomSuggestions ?? [
@@ -133,6 +140,10 @@ export function parseBackup(text, today = vietnamDay()) {
       forecasts: [],
       privacy: { cycle: false, mood: false, notes: false, symptoms: false },
     },
-    summary: { periods: starts.length, entries: Object.keys(entries).length },
+    summary: {
+      periods: starts.length,
+      entries: Object.keys(entries).length,
+      intimacy: s.intimacyDates?.length,
+    },
   };
 }

@@ -1,5 +1,5 @@
 // Never put authenticated API responses or invitation URLs in Cache Storage.
-const CACHE = "cho-em-v24-account-safety";
+const CACHE = "cho-em-v28-sharing-controls";
 const ASSETS = [
   "./",
   "./index.html",
@@ -13,6 +13,12 @@ const ASSETS = [
   "/js/core/storage.js",
   "/shared/dates.js",
   "/shared/backup.js",
+  "/shared/checkin.js",
+  "/shared/undo.js",
+  "/js/core/undo-banner.js",
+  "/js/features/journal/daily-entry.js",
+  "/js/features/journal/today-needs.js",
+  "/js/features/connections/sharing-preview.js",
   "/shared/reminders.js",
   "/js/features/account/account.js",
   "/js/features/account/data-tools.js",

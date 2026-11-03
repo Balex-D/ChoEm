@@ -1,3 +1,4 @@
+import { FLOW_LABELS, NEED_LABELS } from "/shared/checkin.js";
 export function renderJournalPage({
   state,
   cloud,
@@ -9,6 +10,7 @@ export function renderJournalPage({
   openDialog,
   toast,
   writeToday,
+  deleteEntry,
 }) {
   const $ = (selector) => document.querySelector(selector);
   $("#main").innerHTML =
@@ -31,6 +33,27 @@ export function renderJournalPage({
   document.querySelectorAll(".entry").forEach((article) => {
     const date = article.querySelector("[data-delete]").dataset.delete;
     const entry = state.entries[date];
+    const body = document.createElement("p");
+    body.className = "journal-checkin-details";
+    body.textContent = [
+      entry.pain != null ? `Mức đau: ${entry.pain}/10` : "",
+      entry.flow ? `Lượng kinh: ${FLOW_LABELS[entry.flow] || ""}` : "",
+      entry.needs?.length
+        ? `Nhu cầu: ${entry.needs
+            .map((n) => NEED_LABELS[n])
+            .filter(Boolean)
+            .join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (body.textContent) article.append(body);
+    if (entry.needsText?.trim()) {
+      const needs = document.createElement("p");
+      needs.className = "needs-text";
+      needs.textContent = "Điều Em cần: " + entry.needsText;
+      article.append(needs);
+    }
     const button = document.createElement("button");
     button.className = "small-button journal-sharing";
     button.textContent = entry.shared
@@ -67,8 +90,7 @@ export function renderJournalPage({
           '<h2>Xóa ghi chú này?</h2><p>Ghi chú sẽ được xóa khỏi thiết bị.</p><button class="primary" id="delete-entry">Xóa ghi chú</button>',
         );
         $("#delete-entry").onclick = async () => {
-          delete state.entries[b.dataset.delete];
-          if (await persist()) {
+          if (await deleteEntry(b.dataset.delete)) {
             $("#dialog").close();
             renderJournal();
             toast("Đã xóa ghi chú.");

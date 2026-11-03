@@ -1,5 +1,7 @@
 # Triển khai đề xuất review — 02/11/2026
 
+Các chức năng ưu tiên cao cho người dùng đã được bổ sung trong bản tiếp theo: ghi nhanh, hoàn tác, xem trước/tạm dừng chia sẻ và nhu cầu trong ngày. Xem [DAILY_FEATURES.md](DAILY_FEATURES.md); bản mới cần thêm migration 008.
+
 ## Cập nhật ứng dụng
 
 ```powershell

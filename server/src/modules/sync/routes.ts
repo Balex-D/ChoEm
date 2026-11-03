@@ -4,6 +4,10 @@ import type { Database } from "../../db/database.js";
 import { authenticate } from "../auth/session.js";
 import { writeSchema, dateSchema } from "./schema.js";
 import { getState, saveState } from "./repository.js";
+import { recordIntimacy } from "./intimacy.js";
+import { sharedDetails, sharedSummary } from "../connections/service.js";
+// @ts-ignore Shared timezone helper.
+import { vietnamDay } from "../../../../shared/dates.js";
 export function syncRoutes(db: Database) {
   const router = Router();
   router.use(authenticate(db));
@@ -14,6 +18,20 @@ export function syncRoutes(db: Database) {
     const input = writeSchema.parse(req.body);
     res.json(await saveState(db, req.user!.id, input.state, input.revision));
   });
+  router.get("/preview", async (req, res) => {
+    const month = z
+      .string()
+      .regex(/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/)
+      .parse(req.query.month);
+    const current = await getState(db, req.user!.id);
+    const today = vietnamDay();
+    res.json({
+      shared: sharedDetails(current.state, today, month, current.revision),
+      summary: sharedSummary(current.state, today),
+      revision: current.revision,
+      today,
+    });
+  });
   router.patch("/privacy", async (req, res) => {
     const input = z
       .object({
@@ -23,6 +41,9 @@ export function syncRoutes(db: Database) {
           mood: z.boolean(),
           notes: z.boolean(),
           symptoms: z.boolean().optional(),
+          paused: z.boolean().optional(),
+          intimacy: z.boolean().optional(),
+          intimacyEdit: z.boolean().optional(),
         }),
         hideExistingJournals: z.boolean().default(false),
       })
@@ -44,11 +65,34 @@ export function syncRoutes(db: Database) {
           )
         : current.state.entries,
     };
-    const result = await saveState(db, req.user!.id, state, input.revision);
+    const result = await saveState(db, req.user!.id, state, input.revision, {
+      allowPause: true,
+    });
     res.json({
-      state: { ...state, forecasts: result.forecasts },
+      state: {
+        ...state,
+        privacy: { ...state.privacy, ...result.intimacyPermissions },
+        forecasts: result.forecasts,
+      },
       revision: result.revision,
     });
+  });
+  router.patch("/intimacy/:date", async (req, res) => {
+    const date = dateSchema.parse(req.params.date);
+    const input = z
+      .object({
+        revision: z.number().int().min(0).max(2147483646),
+        recorded: z.boolean(),
+      })
+      .parse(req.body);
+    await recordIntimacy(
+      db,
+      req.user!.id,
+      date,
+      input.recorded,
+      input.revision,
+    );
+    res.json(await getState(db, req.user!.id));
   });
   router.patch("/entries/:date/sharing", async (req, res) => {
     const date = dateSchema.parse(req.params.date);

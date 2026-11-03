@@ -97,7 +97,7 @@ test(
       const r = await db.query(
         "SELECT count(*)::int AS count FROM schema_migrations",
       );
-      assert.equal(r.rows[0].count, 7);
+      assert.equal(r.rows[0].count, 10);
     });
     await t.test(
       "stale tab cannot read or write another account with matching revision",

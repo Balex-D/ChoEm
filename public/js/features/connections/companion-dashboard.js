@@ -19,6 +19,7 @@ export async function mountCompanionDashboard({
   let tab = "overview";
   let data = null;
   let requestId = 0;
+  let editingIntimacy = false;
   const target = root.querySelector("#shared-summary");
   const navigation = [];
   const parentButtons = [];
@@ -89,6 +90,7 @@ export async function mountCompanionDashboard({
   }
   syncNavigation();
   const load = async () => {
+    if (editingIntimacy) return;
     const request = ++requestId;
     try {
       const { shared } = await api(
@@ -138,6 +140,30 @@ export async function mountCompanionDashboard({
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button || !root.contains(button) || button.disabled) return;
+    if (button.dataset.intimacyToggle && data?.intimacy?.canEdit) {
+      if (editingIntimacy) return;
+      const date = button.dataset.intimacyToggle;
+      const recorded = !data.intimacy.dates.includes(date),
+        revision = data.intimacy.revision;
+      editingIntimacy = true;
+      button.disabled = true;
+      void (async () => {
+        let error;
+        try {
+          await api(`/connections/${connectionId}/intimacy/${date}`, {
+            method: "PATCH",
+            body: { revision, recorded },
+          });
+        } catch (e) {
+          error = e;
+        } finally {
+          editingIntimacy = false;
+        }
+        await load();
+        if (error && root.isConnected) showError(error);
+      })();
+      return;
+    }
     if (button.dataset.companionTab) {
       navigate(button.dataset.companionTab);
       target

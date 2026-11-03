@@ -12,6 +12,7 @@ import { issueInvite } from "./invites.js";
 import { HttpError } from "../../common/errors.js";
 import { dateSchema } from "../sync/schema.js";
 import { readState } from "../sync/repository.js";
+import { recordIntimacy } from "../sync/intimacy.js";
 import { sharedSummary, sharedDetails } from "./service.js";
 import {
   getConnectionSpace,
@@ -21,6 +22,26 @@ import {
 export function connectionRoutes(db: Database, c: Config) {
   const router = Router();
   router.use(authenticate(db));
+  router.patch("/:id/intimacy/:date", async (req, res) => {
+    const id = z.string().uuid().parse(req.params.id),
+      date = dateSchema.parse(req.params.date);
+    const input = z
+      .object({
+        revision: z.number().int().min(0).max(2147483646),
+        recorded: z.boolean(),
+      })
+      .parse(req.body);
+    res.json(
+      await recordIntimacy(
+        db,
+        req.user!.id,
+        date,
+        input.recorded,
+        input.revision,
+        id,
+      ),
+    );
+  });
   router.get("/:id/space", async (req, res) => {
     const id = z.string().uuid().parse(req.params.id);
     res.json(await getConnectionSpace(db, id, req.user!.id));
@@ -197,6 +218,10 @@ export function connectionRoutes(db: Database, c: Config) {
           "INSERT INTO connections(id,owner_id,companion_id) VALUES($1,$2,$3)",
           [id, invite.owner_id, req.user!.id],
         );
+        await q.query(
+          "UPDATE profiles SET companion_edit_intimacy=false,revision=revision+1 WHERE user_id=$1 AND companion_edit_intimacy=true",
+          [invite.owner_id],
+        );
         await q.query("DELETE FROM connection_invites WHERE token_hash=$1", [
           hashToken(token),
         ]);
@@ -213,6 +238,10 @@ export function connectionRoutes(db: Database, c: Config) {
       );
       if (!rows.length)
         throw new HttpError(404, "NOT_FOUND", "Không tìm thấy kết nối.");
+      await q.query(
+        "UPDATE profiles SET companion_edit_intimacy=false,revision=revision+1 WHERE user_id=$1 AND companion_edit_intimacy=true",
+        [rows[0].owner_id],
+      );
       await q.query("DELETE FROM connection_invites WHERE owner_id=$1", [
         rows[0].owner_id,
       ]);
@@ -238,11 +267,8 @@ export function connectionRoutes(db: Database, c: Config) {
       await q.query("SELECT user_id FROM profiles WHERE user_id=$1 FOR SHARE", [
         link.owner_id,
       ]);
-      return sharedDetails(
-        (await readState(q, link.owner_id)).state,
-        today,
-        month,
-      );
+      const current = await readState(q, link.owner_id);
+      return sharedDetails(current.state, today, month, current.revision);
     });
     res.json({ shared });
   });

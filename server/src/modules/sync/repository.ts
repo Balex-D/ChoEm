@@ -18,7 +18,7 @@ export async function readState(q: Queryable, userId: string) {
     [userId],
   );
   const { rows: journal } = await q.query(
-    "SELECT entry_date::text AS date,mood,symptoms,note,shared FROM journal_entries WHERE user_id=$1 ORDER BY entry_date",
+    'SELECT entry_date::text AS date,mood,symptoms,note,shared,pain,flow,needs,needs_shared AS "needsShared",needs_text AS "needsText" FROM journal_entries WHERE user_id=$1 ORDER BY entry_date',
     [userId],
   );
   const state: AppState = {
@@ -32,7 +32,17 @@ export async function readState(q: Queryable, userId: string) {
     entries: Object.fromEntries(
       journal.map((r) => [
         r.date,
-        { mood: r.mood, symptoms: r.symptoms, note: r.note, shared: r.shared },
+        {
+          mood: r.mood,
+          symptoms: r.symptoms,
+          note: r.note,
+          shared: r.shared,
+          pain: r.pain,
+          flow: r.flow,
+          needs: r.needs,
+          needsShared: r.needsShared,
+          needsText: r.needsText,
+        },
       ]),
     ),
     privacy: {
@@ -40,8 +50,16 @@ export async function readState(q: Queryable, userId: string) {
       mood: p.share_mood,
       notes: p.share_notes,
       symptoms: p.share_symptoms,
+      paused: p.sharing_paused,
+      intimacy: p.share_intimacy,
+      intimacyEdit: p.companion_edit_intimacy,
     },
   };
+  const { rows: intimacy } = await q.query(
+    "SELECT record_date::text AS date FROM intimacy_days WHERE user_id=$1 ORDER BY record_date",
+    [userId],
+  );
+  state.intimacyDates = intimacy.map((row) => row.date);
   const { rows: forecasts } = await q.query(
     "SELECT anchor_date::text AS anchor,expected_start::text AS start,expected_end::text AS end,issued_at FROM cycle_forecasts WHERE user_id=$1 ORDER BY anchor_date",
     [userId],
@@ -88,13 +106,14 @@ export async function saveState(
   userId: string,
   state: AppState,
   revision: number,
+  { allowPause = false } = {},
 ) {
   state = resolvePeriods(state, vietnamDay());
   return db.transaction(async (q) => {
     const {
       rows: [profile],
     } = await q.query(
-      "SELECT revision FROM profiles WHERE user_id=$1 FOR UPDATE",
+      "SELECT revision,sharing_paused,share_intimacy,companion_edit_intimacy FROM profiles WHERE user_id=$1 FOR UPDATE",
       [userId],
     );
     if (!profile)
@@ -109,7 +128,7 @@ export async function saveState(
     await q.query(
       `UPDATE profiles SET name=$2,share_cycle=$3,share_mood=$4,share_notes=$5,
        share_symptoms=$6,period_estimates=$7::jsonb,symptom_suggestions=$8::jsonb,
-       revision=revision+1,updated_at=now() WHERE user_id=$1`,
+       sharing_paused=$9,share_intimacy=$10,companion_edit_intimacy=$11,revision=revision+1,updated_at=now() WHERE user_id=$1`,
       [
         userId,
         state.name,
@@ -119,8 +138,27 @@ export async function saveState(
         state.privacy.symptoms,
         JSON.stringify(state.periodEstimates || {}),
         JSON.stringify(state.symptomSuggestions),
+        allowPause
+          ? Boolean(state.privacy.paused)
+          : Boolean(profile.sharing_paused),
+        allowPause
+          ? Boolean(state.privacy.intimacy)
+          : Boolean(profile.share_intimacy),
+        allowPause
+          ? Boolean(state.privacy.intimacy && state.privacy.intimacyEdit)
+          : Boolean(profile.companion_edit_intimacy),
       ],
     );
+    if (state.intimacyDates !== undefined) {
+      await q.query(
+        "DELETE FROM intimacy_days WHERE user_id=$1 AND NOT(record_date=ANY($2::date[]))",
+        [userId, state.intimacyDates],
+      );
+      await q.query(
+        "INSERT INTO intimacy_days(user_id,record_date) SELECT $1,unnest($2::date[]) ON CONFLICT DO NOTHING",
+        [userId, state.intimacyDates],
+      );
+    }
     // Two statements per collection, independent of history size. Retain unchanged rows.
     await q.query(
       "DELETE FROM cycles WHERE user_id=$1 AND NOT(start_date=ANY($2::date[]))",
@@ -146,12 +184,13 @@ export async function saveState(
       [userId, Object.keys(state.entries)],
     );
     await q.query(
-      `INSERT INTO journal_entries(user_id,entry_date,mood,symptoms,note,shared)
-       SELECT $1,x.date,x.mood,x.symptoms,x.note,x.shared
-       FROM jsonb_to_recordset($2::jsonb) AS x(date date,mood text,symptoms jsonb,note text,shared boolean)
-       ON CONFLICT(user_id,entry_date) DO UPDATE SET mood=excluded.mood,symptoms=excluded.symptoms,note=excluded.note,shared=excluded.shared
-       WHERE (journal_entries.mood,journal_entries.symptoms,journal_entries.note,journal_entries.shared)
-         IS DISTINCT FROM (excluded.mood,excluded.symptoms,excluded.note,excluded.shared)`,
+      `INSERT INTO journal_entries(user_id,entry_date,mood,symptoms,note,shared,pain,flow,needs,needs_shared,needs_text)
+       SELECT $1,x.date,x.mood,x.symptoms,x.note,x.shared,x.pain,COALESCE(x.flow,''),COALESCE(x.needs,'[]'::jsonb),COALESCE(x."needsShared",false),COALESCE(x."needsText",'')
+       FROM jsonb_to_recordset($2::jsonb) AS x(date date,mood text,symptoms jsonb,note text,shared boolean,pain smallint,flow text,needs jsonb,"needsShared" boolean,"needsText" text)
+       ON CONFLICT(user_id,entry_date) DO UPDATE SET mood=excluded.mood,symptoms=excluded.symptoms,note=excluded.note,shared=excluded.shared,
+         pain=excluded.pain,flow=excluded.flow,needs=excluded.needs,needs_shared=excluded.needs_shared,needs_text=excluded.needs_text
+       WHERE (journal_entries.mood,journal_entries.symptoms,journal_entries.note,journal_entries.shared,journal_entries.pain,journal_entries.flow,journal_entries.needs,journal_entries.needs_shared,journal_entries.needs_text)
+         IS DISTINCT FROM (excluded.mood,excluded.symptoms,excluded.note,excluded.shared,excluded.pain,excluded.flow,excluded.needs,excluded.needs_shared,excluded.needs_text)`,
       [
         userId,
         JSON.stringify(
@@ -168,6 +207,14 @@ export async function saveState(
     );
     await ensureForecast(q, userId, state);
     const saved = await readState(q, userId);
-    return { revision: revision + 1, forecasts: saved.state.forecasts };
+    return {
+      revision: revision + 1,
+      forecasts: saved.state.forecasts,
+      paused: saved.state.privacy.paused,
+      intimacyPermissions: {
+        intimacy: saved.state.privacy.intimacy,
+        intimacyEdit: saved.state.privacy.intimacyEdit,
+      },
+    };
   });
 }

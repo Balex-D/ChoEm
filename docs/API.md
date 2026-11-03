@@ -2,6 +2,12 @@
 
 Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng origin.
 
+Migration 010 thêm `state.intimacyDates` (mảng ngày quan hệ, không trùng, không ở tương lai). Snapshot cũ không có trường này được giữ nguyên dữ liệu đã lưu. Hai quyền `privacy.intimacy` (xem) và `privacy.intimacyEdit` (Anh sửa) mặc định false, chỉ đổi qua PATCH `/state/privacy`; PUT snapshot không cấp quyền. Quyền sửa đòi hỏi quyền xem; tắt xem tự thu hồi quyền sửa. Pause chặn cả xem/sửa. Khi được phép xem, shared theo tháng có `intimacy:{dates,canEdit,revision}`. Thay đổi từ Anh tăng revision hồ sơ Em, nên snapshot cũ không ghi đè được. Ngắt kết nối hoặc kết nối mới thu hồi quyền sửa cũ.
+
+Từ migration 008, `state.entries[date]` có thêm `pain` (null hoặc số nguyên 0–10), `flow` (`""`, `spotting`, `light`, `medium`, `heavy`), `needs` (tối đa 3 mã `listen`, `rest`, `company`) và `needsShared` (mặc định false). Migration 009 thêm `needsText` (chuỗi tối đa 500 ký tự, mặc định rỗng). Mức đau/lượng kinh chỉ được trả cho người đồng hành khi `privacy.symptoms=true`; nhu cầu và lời tự viết cần `needsShared=true` và chỉ được trả cho ngày hiện tại theo giờ Việt Nam. Chỉ có `needsText` mà không chọn `needs` vẫn được phép gửi; bản xem theo tháng trả `needsText` dưới dạng `{[today]:text}` khi được chia sẻ.
+
+`privacy.paused=true` chặn mọi trường dữ liệu cá nhân, kể cả nhật ký đã chia sẻ và nhu cầu; vẫn trả tên và thông báo tạm dừng. Tên, thông tin kết nối, lời nhắn Anh gửi và ngày bên nhau vẫn được giữ. Chỉ PATCH `/state/privacy` thay đổi được cờ tạm dừng; PUT `/state` giữ giá trị hiện có ở máy chủ và trả thêm `paused` để client cập nhật. Xem [DAILY_FEATURES.md](DAILY_FEATURES.md).
+
 ## Xác thực và chống CSRF
 
 - Đăng nhập dùng cookie `ce_session`: HttpOnly, SameSite=Strict, Secure trong production, thời hạn 30 ngày.
@@ -27,10 +33,13 @@ Base path: `/api`. JSON request/response. Frontend và API phục vụ cùng ori
 | POST | `/auth/reset-password` | `{token,password}`; dùng một lần, hạn 30 phút, thu hồi mọi session; cần đăng nhập lại |
 | DELETE | `/auth/account` | `{password,confirmation:"XÓA TÀI KHOẢN"}`; xóa vĩnh viễn dữ liệu liên quan và xóa cookie |
 | GET | `/state` | `{state,revision}` của chính tài khoản |
+| PATCH | `/state/intimacy/:date` | `{revision,recorded:boolean}`; ghi/bỏ ngày quan hệ của chính tài khoản, trả state/revision mới |
+| GET | `/state/preview?month=YYYY-MM` | `{shared,summary,revision,today}`; xem trước dữ liệu đã đồng bộ theo cùng bộ lọc của người đồng hành, cần session/header tài khoản |
 | PUT | `/state` | `{state,revision}`; đồng bộ snapshot nguyên tử; trả revision mới |
-| PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,symptoms,notes},hideExistingJournals?}`; trả state và revision mới; tùy chọn ẩn nhật ký cũ chỉ dùng khi `notes=false` |
+| PATCH | `/state/privacy` | `{revision,privacy:{cycle,mood,symptoms,notes,paused?},hideExistingJournals?}`; `paused` tạm dừng/tiếp tục chia sẻ cá nhân, giữ các lựa chọn; trả state/revision mới; ẩn nhật ký cũ chỉ dùng khi `notes=false` |
 | PATCH | `/state/entries/:date/sharing` | `{revision,shared}`; ẩn/hiện từng nhật ký của chính tài khoản, xác nhận từ server |
 | GET | `/connections` | Danh sách kết nối của chính tài khoản, tên đối phương và vai trò |
+| PATCH | `/connections/:id/intimacy/:date` | `{revision,recorded:boolean}`; chỉ Anh đang kết nối, cần cả quyền xem và sửa, không tạm dừng; trả date/recorded/revision; lỗi xung đột không chứa state riêng tư của Em |
 | GET | `/connections/:id/space` | Trả `{space:{anniversary,message},revision,role}` cho thành viên của kết nối |
 | PATCH | `/connections/:id/space` | `{revision,anniversary?,message?}`; cả hai sửa ngày bên nhau, chỉ Anh sửa lời nhắn cho Em |
 | POST | `/connections/invites` | Chỉ Em chưa liên kết; trả `{code,token,url,qr,expiresAt}`; mã 6 ký tự A–Z/0–9 dùng một lần, hạn 2 phút; không trả UUID Em; `token` là alias của `code` |

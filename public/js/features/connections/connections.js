@@ -4,6 +4,7 @@ import { mountCompanionDashboard } from "./companion-dashboard.js";
 import { mountPartnerMessage } from "./partner-message.js";
 import { parseConnectionCode } from "./connection-code.js";
 import { scanConnectionQR } from "./qr-scanner.js";
+import { mountSharingControls } from "./sharing-preview.js";
 export async function renderConnections({
   cloud,
   main,
@@ -33,8 +34,10 @@ export async function renderConnections({
     root.innerHTML = `<div class="connect-grid"><section class="card"><h3>♡ Người em chọn chia sẻ</h3>${owned ? `<p>Đang chia sẻ với <b>${escape(owned.name)}</b>.</p><button class="small-button" data-unlink="${owned.id}">Ngắt kết nối</button>` : '<p>Tạo một lời mời riêng. Mã dùng một lần, hết hạn sau 2 phút. Chỉ gửi mã cho người em muốn kết nối.</p><button class="primary full-width" id="create-invite">Tạo mã mời và QR</button><button class="text-button" id="cancel-invite">Hủy mã mời đang chờ</button>'}<hr><h3>Em chọn điều muốn chia sẻ</h3>${[
       ["cycle", "Trạng thái chu kỳ"],
       ["mood", "Tâm trạng hôm nay"],
-      ["symptoms", "Triệu chứng"],
+      ["symptoms", "Triệu chứng, mức đau và lượng kinh"],
       ["notes", "Nhật ký"],
+      ["intimacy", "Chia sẻ ngày quan hệ"],
+      ["intimacyEdit", "Cho Anh chỉnh sửa ngày quan hệ"],
     ]
       .map(
         ([k, t]) =>
@@ -102,6 +105,22 @@ export async function renderConnections({
         login,
         pendingInvite: "",
       });
+    const updatePrivacy = () => {
+      const privacy = cloud.envelope.state.privacy;
+      root.querySelectorAll("[data-privacy]").forEach((button) => {
+        button.setAttribute(
+          "aria-checked",
+          String(Boolean(privacy[button.dataset.privacy])),
+        );
+      });
+      const pause = root.querySelector("#sharing-pause");
+      if (pause) {
+        pause.setAttribute("aria-pressed", String(Boolean(privacy.paused)));
+        pause.textContent = privacy.paused
+          ? "Tiếp tục chia sẻ theo lựa chọn cũ"
+          : "Tạm dừng mọi chia sẻ cá nhân";
+      }
+    };
     const bind = (selector, action) =>
       root.querySelectorAll(selector).forEach(
         (b) =>
@@ -188,16 +207,25 @@ export async function renderConnections({
     bind("[data-privacy]", async (b) => {
       const k = b.dataset.privacy,
         enabled = b.getAttribute("aria-checked") !== "true";
-      await cloud.changePrivacy({
+      const privacy = {
         ...cloud.envelope.state.privacy,
         [k]: enabled,
-      });
-      await reload();
+      };
+      if (k === "intimacyEdit" && enabled && !privacy.intimacy)
+        throw new Error(
+          "Em bật chia sẻ ngày quan hệ trước khi cho Anh chỉnh sửa nhé.",
+        );
+      if (k === "intimacy" && !enabled) privacy.intimacyEdit = false;
+      await cloud.changePrivacy(privacy, { refreshView: false });
+      updatePrivacy();
       toast("Đã cập nhật quyền chia sẻ.");
       if (k === "notes" && !enabled) {
         open(
           '<h2>Cất những trang cũ cho riêng Em</h2><p>Từ những ngày sau, nhật ký mới sẽ mặc định dành riêng cho Em. Còn những trang đã gửi Anh, Em muốn giữ lại để Anh đọc, hay cất tất cả vào góc nhỏ riêng của mình?</p><button class="primary" id="hide-old-journals">Ẩn tất cả nhật ký cũ</button><button class="small-button" id="keep-old-journals">Giữ lại cho Anh</button><p id="journal-choice-error" role="alert"></p>',
         );
+        // Closing via X, Escape or backdrop keeps the old entry flags unchanged.
+        const dialog = document.querySelector("#dialog");
+        dialog.returnValue = "keep";
         document.querySelector("#keep-old-journals").onclick = close;
         document.querySelector("#hide-old-journals").onclick = async (
           event,
@@ -206,9 +234,11 @@ export async function renderConnections({
           try {
             await cloud.changePrivacy(cloud.envelope.state.privacy, {
               hideExistingJournals: true,
+              refreshView: false,
             });
+            dialog.returnValue = "hide";
             close();
-            await reload();
+            updatePrivacy();
             toast("Đã cất những trang cũ vào góc riêng của Em ♡");
           } catch (error) {
             document.querySelector("#journal-choice-error").textContent =
@@ -218,6 +248,16 @@ export async function renderConnections({
         };
       }
     });
+    if (!isAnh)
+      mountSharingControls({
+        root,
+        cloud,
+        open,
+        escape,
+        onChange: updatePrivacy,
+        showError,
+        toast,
+      });
     const linked = isAnh ? incoming : owned;
     let partnerMessage = null;
     if (linked) {

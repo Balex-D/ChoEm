@@ -7,6 +7,9 @@ const { analyzeCycles, daysBetween } = cycleAnalysis;
 export function sharedSummary(state: AppState, today: string) {
   // Return only explicitly allowed fields; do not return the complete snapshot to a companion.
   const shared: Record<string, unknown> = { name: state.name };
+  if (state.privacy.paused) return { ...shared, paused: true };
+  if (state.privacy.intimacy)
+    shared.intimacy = (state.intimacyDates || []).includes(today);
   if (state.privacy.cycle) {
     const start = state.starts
       .filter((x) => x <= today)
@@ -32,12 +35,33 @@ export function sharedSummary(state: AppState, today: string) {
     shared.note = entry?.note || "";
   }
   if (state.privacy.symptoms) shared.symptoms = entry?.symptoms || [];
+  if (state.privacy.symptoms) {
+    shared.pain = entry?.pain ?? null;
+    shared.flow = entry?.flow || "";
+  }
+  if (entry?.needsShared && entry.needs?.length) shared.needs = entry.needs;
+  if (entry?.needsShared && entry.needsText?.trim())
+    shared.needsText = entry.needsText;
   shared.care =
     "Hỏi người ấy cần gì, ở bên và lắng nghe. Đừng suy đoán cảm xúc chỉ dựa vào chu kỳ.";
   return shared;
 }
-export function sharedDetails(state: AppState, today: string, month: string) {
+export function sharedDetails(
+  state: AppState,
+  today: string,
+  month: string,
+  revision = 0,
+) {
   const result: Record<string, unknown> = { name: state.name, month };
+  if (state.privacy.paused) return { ...result, paused: true };
+  if (state.privacy.intimacy)
+    result.intimacy = {
+      dates: (state.intimacyDates || []).filter(
+        (date) => date.startsWith(month + "-") && date <= today,
+      ),
+      canEdit: Boolean(state.privacy.intimacyEdit),
+      revision,
+    };
   if (state.privacy.cycle) {
     result.calendar = calendarMonth(state, month, today);
     const analysis = analyzeCycles(state, today);
@@ -73,6 +97,27 @@ export function sharedDetails(state: AppState, today: string, month: string) {
     result.symptoms = Object.fromEntries(
       entries.map(([date, entry]) => [date, entry.symptoms]),
     );
+  if (state.privacy.symptoms) {
+    result.body = Object.fromEntries(
+      entries.map(([date, entry]) => [
+        date,
+        { pain: entry.pain ?? null, flow: entry.flow || "" },
+      ]),
+    );
+  }
+  const todayEntry = state.entries[today];
+  if (
+    today.startsWith(month + "-") &&
+    todayEntry?.needsShared &&
+    todayEntry.needs?.length
+  )
+    result.needs = { [today]: todayEntry.needs };
+  if (
+    today.startsWith(month + "-") &&
+    todayEntry?.needsShared &&
+    todayEntry.needsText?.trim()
+  )
+    result.needsText = { [today]: todayEntry.needsText };
   if (
     state.privacy.notes ||
     Object.values(state.entries).some((entry) => entry.shared)

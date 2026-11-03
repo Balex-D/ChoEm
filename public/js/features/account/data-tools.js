@@ -29,7 +29,7 @@ export function importBackupDialog({ cloud, open, close, escape, toast }) {
         throw new Error("File vượt giới hạn 2 MB.");
       const parsed = parseBackup(await file.text());
       if (token !== selection || !input.isConnected) return;
-      preview.innerHTML = `<p><b>${escape(parsed.state.name)}</b> · ${parsed.summary.periods} kỳ kinh · ${parsed.summary.entries} nhật ký.</p><p>Thao tác thay thế dữ liệu hiện tại. Nhật ký nhập vào được đặt riêng tư; quyền chia sẻ tài khoản được giữ. Dự đoán sẽ được tính lại. Bản hiện tại được lưu dự phòng trên thiết bị.</p><button class="primary" id="confirm-restore">Thay thế bằng bản sao này</button>`;
+      preview.innerHTML = `<p><b>${escape(parsed.state.name)}</b> · ${parsed.summary.periods} kỳ kinh · ${parsed.summary.entries} nhật ký${parsed.summary.intimacy === undefined ? "" : ` · ${parsed.summary.intimacy} ngày quan hệ`}.</p><p>Thao tác thay thế dữ liệu hiện tại. Nhật ký nhập vào được đặt riêng tư; quyền chia sẻ tài khoản được giữ, kể cả quyền xem ngày quan hệ. Dự đoán sẽ được tính lại. Bản hiện tại được lưu dự phòng trên thiết bị.</p><button class="primary" id="confirm-restore">Thay thế bằng bản sao này</button>`;
       preview.querySelector("button").onclick = async (event) => {
         event.target.disabled = true;
         input.disabled = true;

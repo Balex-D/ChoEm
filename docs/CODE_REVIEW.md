@@ -1,5 +1,7 @@
 # Kết quả rà soát mã nguồn — 02/11/2026
 
+Các chức năng ưu tiên cao cho người dùng đã được triển khai tiếp theo tại [DAILY_FEATURES.md](DAILY_FEATURES.md): ghi nhanh, hoàn tác, xem trước/tạm dừng chia sẻ và gửi nhu cầu hôm nay. Các kết quả kiểm chứng bên dưới là của lần review ban đầu.
+
 ## Lỗi đã sửa
 
 | Mức độ | Vị trí | Lỗi và cách sửa |

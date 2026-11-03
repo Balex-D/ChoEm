@@ -1,3 +1,4 @@
+import { FLOW_LABELS } from "/shared/checkin.js";
 export function renderCalendarPage({
   state,
   selected,
@@ -39,6 +40,17 @@ export function renderCalendarPage({
   tools.innerHTML =
     '<button class="small-button" id="manage-periods">Các kỳ kinh đã ghi nhận</button>';
   $(".day-details").append(tools);
+  if (e.pain != null || e.flow) {
+    const body = document.createElement("p");
+    body.className = "journal-checkin-details";
+    body.textContent = [
+      e.pain != null ? `Mức đau: ${e.pain}/10` : "",
+      e.flow ? `Lượng kinh: ${FLOW_LABELS[e.flow] || ""}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    $(".day-details").append(body);
+  }
   renderPeriodControls();
   $("#manage-periods").onclick = managePeriodsDialog;
   $("#save-note").onclick = async () => {

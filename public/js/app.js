@@ -1,4 +1,11 @@
 import { renderJournalPage } from "./features/journal/journal-page.js";
+import {
+  dailyEntry,
+  mountDailyActions,
+} from "./features/journal/daily-entry.js";
+import { todayNeeds } from "./features/journal/today-needs.js";
+import { UndoBanner } from "./core/undo-banner.js";
+import { undoRecord, restoreUndo } from "/shared/undo.js";
 import { renderCalendarPage } from "./features/cycle/calendar-page.js";
 import { openStorage } from "./core/storage.js";
 import { recoveryLinkDialog } from "./features/account/recovery.js";
@@ -27,6 +34,8 @@ import { appendRelationshipSettings } from "./features/connections/relationship-
 import { accountDialog } from "./features/account/account.js";
 import { renderConnections } from "./features/connections/connections.js";
 let cloud;
+const undo = new UndoBanner();
+const ownerKey = () => cloud?.user?.id || "guest";
 let periodDragCleanup = null;
 let periodSaving = false;
 let analysisRange = "3m";
@@ -99,6 +108,7 @@ const defaultState = {
   symptomSuggestions: [...symptoms],
   starts: [],
   ends: {},
+  intimacyDates: [],
   entries: {},
   privacy: { cycle: true, mood: false, notes: false, symptoms: false },
 };
@@ -121,9 +131,10 @@ async function init() {
         el.textContent = (user ? "☁ " : "○ ") + message;
         el.title = user ? "Tài khoản: " + user.email : "Đăng nhập để đồng bộ";
       },
-      remote: (next) => {
+      remote: (next, { refresh = true } = {}) => {
+        if (undo.record && undo.record.owner !== ownerKey()) undo.clear();
         state = next;
-        render();
+        if (refresh) render();
       },
       canRefresh: () =>
         !$("#dialog").open &&
@@ -131,6 +142,7 @@ async function init() {
         !document.querySelector('[data-space-dirty="true"]') &&
         !hasUnsavedDraft(),
       sessionChanged: () => {
+        undo.clear();
         $("#dialog").close();
         toast(
           "Tài khoản đã đổi ở tab khác. Hãy mở Tài khoản để đăng nhập lại.",
@@ -198,6 +210,7 @@ function openAccount() {
     escape,
     toast,
     afterLogin: () => {
+      undo.clear();
       if (pendingInvite) view = "connect";
       render();
     },
@@ -274,7 +287,75 @@ function dayType(d) {
 }
 function hasBodyRecord(k) {
   const e = state.entries[k];
-  return !!(e && ((e.symptoms || []).length || (e.note || "").trim()));
+  return !!(
+    e &&
+    ((e.symptoms || []).length ||
+      (e.note || "").trim() ||
+      e.pain != null ||
+      e.flow ||
+      e.needs?.length ||
+      e.needsText?.trim())
+  );
+}
+function offerUndo(before, scope, label) {
+  const record = undoRecord(before, state, scope, ownerKey());
+  undo.show(record, label, async (saved) => {
+    if (cloud?.suspended || cloud?.conflict || cloud?.expired)
+      throw new Error("Hãy đăng nhập và xử lý đồng bộ trước khi hoàn tác.");
+    if ($("#dialog").open || hasUnsavedDraft())
+      throw new Error("Hãy lưu bản nháp và đóng hộp thoại trước khi hoàn tác.");
+    const previous = state;
+    state = restoreUndo(state, saved, ownerKey());
+    if (!(await persist())) {
+      state = previous;
+      throw new Error("Chưa lưu được hoàn tác. Hãy thử lại.");
+    }
+    render();
+    toast("Đã hoàn tác. Nhật ký khôi phục được đặt riêng tư.");
+  });
+}
+async function commitEntry(date, entry, label = "Đã lưu ghi chép") {
+  const before = structuredClone(state);
+  if (entry === null) delete state.entries[date];
+  else state.entries[date] = entry;
+  if (!(await persist())) {
+    state = before;
+    return false;
+  }
+  render();
+  offerUndo(
+    before,
+    { kind: "entry", date },
+    entry === null ? "Đã xóa nhật ký" : label,
+  );
+  return true;
+}
+function openEntry() {
+  dailyEntry({
+    state,
+    cloud,
+    open: openDialog,
+    close: () => $("#dialog").close(),
+    escape,
+    toast,
+    commit: commitEntry,
+  });
+}
+function dailyActions() {
+  mountDailyActions({
+    main: $("#main"),
+    onEntry: openEntry,
+    onNeeds: () =>
+      todayNeeds({
+        state,
+        cloud,
+        open: openDialog,
+        close: () => $("#dialog").close(),
+        escape,
+        toast,
+        commit: commitEntry,
+      }),
+  });
 }
 function calendar(wide = false) {
   const first = new Date(month),
@@ -291,13 +372,19 @@ function calendar(wide = false) {
     (_, i) => {
       const d = add(start, i),
         k = key(d);
-      return `<button data-day="${k}" class="day ${dayType(d)} ${hasBodyRecord(k) ? "has-body-record" : ""} ${k === todayKey ? "today" : ""} ${d.getMonth() !== month.getMonth() ? "outside" : ""} ${wide && k === selected ? "selected" : ""}" aria-label="${d.toLocaleDateString("vi-VN")} ${dayType(d) === "period" ? "ngày kinh" : ""}">${d.getDate()}</button>`;
+      return `<button data-day="${k}" class="day ${dayType(d)} ${hasBodyRecord(k) ? "has-body-record" : ""} ${k === todayKey ? "today" : ""} ${d.getMonth() !== month.getMonth() ? "outside" : ""} ${wide && k === selected ? "selected" : ""}" aria-label="${d.toLocaleDateString("vi-VN")} ${dayType(d) === "period" ? "ngày kinh" : ""}">${d.getDate()}${(state.intimacyDates || []).includes(k) ? '<span class="intimacy-marker" aria-hidden="true">&#9825;</span>' : ""}</button>`;
     },
   ).join(
     "",
   )}</div><div class="calendar-legend"><span><i class="dot"></i> Ngày kinh</span><span><i class="dot dashed"></i> Kỳ kinh dự kiến</span><span><i class="dot purple"></i> Rụng trứng dự kiến</span></div></section>`;
 }
 function bindCalendar({ keepDrag = false } = {}) {
+  if (!$(".intimacy-legend")) {
+    const legend = document.createElement("span");
+    legend.className = "intimacy-legend";
+    legend.textContent = "♡ Ngày quan hệ";
+    $(".calendar-legend")?.append(legend);
+  }
   if (!$(".period-drag-help")) {
     const help = document.createElement("p");
     help.className = "period-drag-help";
@@ -465,6 +552,7 @@ async function savePeriodChange(change, selectedDay = selected) {
     view = "calendar";
     if ($("#dialog").open) $("#dialog").close();
     render();
+    offerUndo(previous, { kind: "periods" }, "Đã cập nhật kỳ kinh");
     toast("Đã lưu kỳ kinh của Em ♡");
     return true;
   } catch (error) {
@@ -498,6 +586,7 @@ function renderHome() {
   $("#main").innerHTML =
     `<div class="greeting"><div><div class="eyebrow">MỘT CHÚT QUAN TÂM MỖI NGÀY</div><h1>Chào ${escape(state.name)}, ngày mới dịu dàng <img class="greeting-star" src="assets/greeting-star.png" alt="" aria-hidden="true"></h1><p>Cơ thể đang kể chuyện, mình cùng lắng nghe nhé.</p></div><div class="date-tag">${icon("calendar")}${date}</div></div><div class="dashboard-grid">${renderCycleHero(c)}${calendar()}</div><div class="section-title"><h2>Hôm nay em cảm thấy thế nào?</h2><span>Cảm xúc nào cũng đáng được ôm ♡</span></div><section class="card mood-box"><div class="mood-options">${moods.map(([img, label]) => `<button class="mood-option ${activeMood === label ? "chosen" : ""}" data-mood="${label}" aria-pressed="${activeMood === label}"><img src="assets/${img}.png" alt=""><span>${label}</span>${activeMood === label ? '<b class="mood-check">✓</b>' : ""}</button>`).join("")}</div></section><div class="lower-grid"><section class="card care-card"><h3 class="mini-title">✧ Một chút dịu dàng</h3><p>Không cần phải luôn tràn đầy năng lượng.<br>Một cốc nước ấm, một khoảng nghỉ nhỏ.<br>Hôm nay, cứ nhẹ nhàng với mình thôi.</p><button id="care-link">Ghé góc người đồng hành ↗</button><img src="assets/HoldPhone.png" alt="Cô gái cầm điện thoại"></section></div><div class="privacy-note">${icon("lock")} ${cloud?.user ? "Góc nhỏ riêng tư. Dữ liệu được đồng bộ theo tài khoản của em." : "Góc nhỏ riêng tư. Dữ liệu của em được lưu trên thiết bị này."}</div>`;
   bindCalendar();
+  dailyActions();
   $("#period-action").onclick = () => handlePeriodAction(todayKey);
   document.querySelectorAll("[data-mood]").forEach(
     (b) =>
@@ -520,7 +609,7 @@ function renderHome() {
   };
 }
 function renderCalendar() {
-  return renderCalendarPage({
+  renderCalendarPage({
     state,
     selected,
     cloud,
@@ -541,6 +630,7 @@ function renderCalendar() {
     },
     getSymptoms: () => activeSymptoms,
   });
+  dailyActions();
 }
 function bindSymptoms() {
   const container = $(".symptoms");
@@ -641,6 +731,29 @@ function handlePeriodAction(day) {
     day,
   );
 }
+async function handleIntimacyAction(date, recorded) {
+  if (hasUnsavedDraft())
+    throw new Error("Em lưu ghi chú đang viết trước khi đổi ngày quan hệ nhé.");
+  if (cloud?.user && navigator.onLine)
+    await cloud.changeIntimacy(date, recorded);
+  else {
+    const before = state;
+    const dates = new Set(state.intimacyDates || []);
+    if (recorded) dates.add(date);
+    else dates.delete(date);
+    state = { ...state, intimacyDates: [...dates].sort() };
+    if (!(await persist())) {
+      state = before;
+      return;
+    }
+    render();
+  }
+  toast(
+    recorded
+      ? "Đã ghi lại ngày gần gũi của hai người ♡"
+      : "Đã bỏ ghi nhận ngày này.",
+  );
+}
 function renderPeriodControls() {
   const existing = periodContaining(state, selected, todayKey);
   const active = ongoingPeriod(state, todayKey);
@@ -656,6 +769,32 @@ function renderPeriodControls() {
   if (estimated)
     panel.querySelector("p").textContent =
       `Kết thúc theo ước tính · ${existing.start} → ${existing.end} · ${periodDayCount(existing.start, existing.end)} ngày. Em có thể chỉnh sửa để xác nhận ngày kết thúc thực tế.`;
+  const actions = document.createElement("div");
+  actions.className = "calendar-record-actions";
+  const periodButton = panel.querySelector("#selected-period-action");
+  periodButton.before(actions);
+  actions.append(periodButton);
+  const intimate = (state.intimacyDates || []).includes(selected);
+  const intimacyButton = document.createElement("button");
+  intimacyButton.type = "button";
+  intimacyButton.id = "intimacy-toggle";
+  intimacyButton.className = "small-button";
+  intimacyButton.setAttribute("aria-pressed", String(intimate));
+  intimacyButton.disabled = future;
+  intimacyButton.textContent = intimate
+    ? "Bỏ ghi nhận ngày quan hệ"
+    : "Ghi nhận ngày quan hệ";
+  actions.append(intimacyButton);
+  intimacyButton.onclick = async () => {
+    intimacyButton.disabled = true;
+    try {
+      await handleIntimacyAction(selected, !intimate);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      if (intimacyButton.isConnected) intimacyButton.disabled = future;
+    }
+  };
   $(".wide-calendar .calendar-legend").after(panel);
   panel.querySelector("#selected-period-action").onclick = async (event) => {
     event.target.disabled = true;
@@ -743,6 +882,7 @@ function renderJournal() {
     renderJournal,
     openDialog,
     toast,
+    deleteEntry: (date) => commitEntry(date, null),
     writeToday: () => {
       selected = todayKey;
       month = new Date(today.getFullYear(), today.getMonth(), 1, 12);
